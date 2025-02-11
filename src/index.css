@@ -1,0 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 99%; /* Soft White */
+    --foreground: 220 5% 26%; /* Softer Gray Text */
+
+    --card: 0 0% 97%; /* Near White */
+    --card-foreground: 220 5% 22%; /* Slightly Softer Dark Gray */
+
+    --popover: 0 0% 98%; /* Ultra-Light Gray */
+    --popover-foreground: 220 5% 24%; /* More Readable Dark Gray */
+
+    --primary: 220 5% 45%; /* Mid Gray */
+    --primary-foreground: 0 0% 99%; /* Off-White */
+
+    --secondary: 220 4% 85%; /* Light Silver */
+    --secondary-foreground: 220 5% 28%; /* Readable Dark Gray */
+
+    --muted: 220 4% 90%; /* Even Softer Gray */
+    --muted-foreground: 220 5% 45%; /* Mid Gray for Contrast */
+
+    --accent: 220 3% 75%; /* Soft Silver */
+    --accent-foreground: 220 5% 22%; /* Slightly Darker Text */
+
+    --destructive: 0 70% 55%; /* Slightly Softer Red */
+    --destructive-foreground: 0 0% 99%; /* Off-White */
+
+    --border: 220 4% 88%; /* Lighter Gray Border */
+    --input: 220 4% 90%; /* Softer Light Gray */
+    --ring: 220 6% 35%; /* Softer Focus Ring */
+
+    --radius: 0.5rem; /* Keeps the Border-Radius the Same */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+.fade-in {
+  opacity: 0;
+  animation: fadeIn 0.5s ease-in forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+body {
+  font-family: 'Work Sans', sans-serif;
+}
+
+.syntax-highlighter-container {
+  position: relative;
+}
+
+.copy-icon {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  cursor: pointer;
+  color: #fff;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+
+  &:hover {
+    opacity: 1;
+  }
+}

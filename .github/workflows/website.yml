@@ -1,0 +1,20 @@
+name: Trigger main website build+deploy
+
+on:
+  push:
+    branches:
+      - landing
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  call-main-workflow:
+    uses: haizelabs/verdict/.github/workflows/website.yml@main
+    permissions:
+        contents: read
+        pages: write
+        id-token: write
