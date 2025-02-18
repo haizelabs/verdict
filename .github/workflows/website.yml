@@ -14,6 +14,7 @@ permissions:
 jobs:
   call-main-workflow:
     uses: haizelabs/verdict/.github/workflows/website.yml@main
+    secrets: inherit
     permissions:
         contents: read
         pages: write
