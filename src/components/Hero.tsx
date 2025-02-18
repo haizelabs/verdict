@@ -9,15 +9,15 @@ const Hero = () => {
         <div className="flex flex-col items-center space-x-4">
           <img
             src={"../../hero.png"}
-            alt="Your Logo"
-            className="h-56 w-auto"
+            alt="Verdict logo with an example Verdict pipeline diagram in the background"
+            className="h-auto w-5/6"
           />
-          <h1 className="text-4xl font-semibold tracking-tight sm:text-4xl bg-clip-text pb-4">
-            Verdict: A Library for Compound LLM Judge Systems
-          </h1>
         </div>
-        <div className="space-y-2">
+        <div className="space-y-1">
           <div className="text-xl tracking-tight text-foreground">
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-3xl bg-clip-text pb-2">
+              A Library for Compound LLM Judge Systems
+            </h1>
             <span className="font-semibold">
               <a href="https://nimit.io" class="font-medium text-blue-600 dark:text-blue-500 hover:underline">Nimit Kalra</a>
             </span>{" "}·{" "}
@@ -26,7 +26,7 @@ const Hero = () => {
             </span>
           </div>
           <div className="text-xl tracking-wide uppercase font-medium text-muted-foreground">
-            <span><a href="https://haizelabs.com" class="font-medium text-blue-600 dark:text-blue-500 hover:underline">Haize Labs</a></span>
+            <span><a href="https://haizelabs.com" class="font-small text-blue-600 dark:text-blue-500 hover:underline">Haize Labs</a></span>
           </div>
           <div className="text-sm tracking-wide uppercase text-muted-foreground">
             New York City
