@@ -7,14 +7,14 @@ const Hero = () => {
     <div className="py-20 space-y-12">
       <div className="space-y-6 text-center max-w-6xl mx-auto px-4 fade-in">
         <div className="flex flex-col items-center space-x-4">
-          <h1 className="text-4xl font-semibold tracking-tight sm:text-4xl bg-clip-text pb-4">
-            Verdict: A Library for Compound LLM Judge Systems
-          </h1>
           <img
-            src={"../../Verdict-Logo.png"}
+            src={"../../hero.png"}
             alt="Your Logo"
             className="h-56 w-auto"
           />
+          <h1 className="text-4xl font-semibold tracking-tight sm:text-4xl bg-clip-text pb-4">
+            Verdict: A Library for Compound LLM Judge Systems
+          </h1>
         </div>
         <div className="space-y-2">
           <div className="text-xl tracking-tight text-foreground">
