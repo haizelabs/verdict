@@ -153,20 +153,20 @@ dataset = DatasetWrapper.from_hf(
 ### Define a Verdict pipeline ###
 pipeline = Pipeline("Pairwise") \\
   >> PairwiseJudgeUnit().prompt("""
-    Determine which response is better.
+      Determine which response is preferable.
 
-    ## Prompt:
-    {source.question}
+      ## Prompt:
+      {source.question}
 
-    ## Response A:
-    {source.response_A}
+      ## Response A:
+      {source.response_A}
 
-    ## Response B:
-    {source.response_B}
+      ## Response B:
+      {source.response_B}
 
-    Respond with only "A" or "B".
-    """).extract(ArgmaxScoreExtractor()) \\
-        .via("gpt-4o-mini", retries=3, temperature=0.0)
+      Respond with only "A" or "B".
+  """).extract(ArgmaxScoreExtractor()) \\
+      .via("gpt-4o-mini", retries=3, temperature=0.0)
 
 ### Execute the pipeline over the dataset in parallel ###
 df, _ = pipeline.run_from_dataset(dataset["claude"], display=True)
