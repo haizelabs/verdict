@@ -197,18 +197,12 @@ print(df)
   return (
     <section className="py-6 fade-in overflow-hidden">
       <div className="mx-auto px-4 sm:px-6">
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
-          <Terminal className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
-          <h2 className="text-2xl sm:text-3xl font-bold">
-            Installation & Quickstart
-          </h2>
-        </div>
 
         <div className="space-y-6 sm:space-y-8">
           <Card className="hover:shadow-xl transition-all duration-300 bg-popover w-full max-w-full">
             <CardContent className="p-4 sm:p-6 w-full">
               <div className="flex flex-wrap items-center gap-2 mb-3 sm:mb-4">
-                <Code2 className="h-5 w-5 text-primary" />
+                <Terminal className="h-5 w-5 text-primary" />
                 <h3 className="text-lg sm:text-xl font-semibold">
                   Installation
                 </h3>
