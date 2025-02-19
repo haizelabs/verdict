@@ -19,9 +19,9 @@ const Hero = () => {
               Verdict: A Library for Scaling Judge-Time Compute
             </h1>
           </div>
-          <div className="text-xl tracking-wide uppercase font-medium text-muted-foreground">
+          <div className="text-2xl tracking-wide uppercase font-medium text-muted-foreground">
             <div>
-              <a href="https://haizelabs.com" className="font-small text-blue-600 dark:text-blue-500 hover:underline">Haize Labs</a>
+              <a href="https://haizelabs.com" className="font-semibold text-indigo-500 dark:text-indigo-500 hover:underline">Haize Labs</a>
             </div>
           </div>
           <div className="text-base tracking-wide uppercase text-muted-foreground pt-2">
