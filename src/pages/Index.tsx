@@ -12,7 +12,7 @@ const sections = [
   { id: "installation-guide", label: "Installation" },
   { id: "results", label: "Results" },
   { id: "applications", label: "Applications" },
-  { id: "why-use-verdict", label: "Why Verdict" },
+  { id: "why-use-verdict", label: "Why Verdict?" },
   { id: "features", label: "Features" },
 ];
 

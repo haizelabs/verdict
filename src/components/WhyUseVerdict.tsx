@@ -4,24 +4,24 @@ import { Target } from "lucide-react";
 
 const reasons = [
   {
-    title: "Generalizability",
-    description:
-      "Verdict judges are more general than task-specific fine-tuned models. Verdict readily applies across different tasks and domains, as seen by our experiments on safety moderation, factual and logical correctness, and hallucination detection.",
-  },
-  {
     title: "Reliability",
     description:
-      "Verdict judges are more stable, accurate, and reliable compared to simple LLM judges. Verdict judges beat out simple LLM judges, fine-tuned evaluators, and even o1-style reasoning models on our benchmarks.",
+      "Verdict judges are stable, accurate, and reliable. Verdict judges beat out single-inference LLM judges, fine-tuned evaluators, and even o1-style reasoning models on a wide range of evaluation benchmarks.",
+  },
+  {
+    title: "Generalizability",
+    description:
+      "Verdict judges are general-purpose evaluators. Verdict readily applies across different tasks and domains, as seen by the above experiments on content moderation, factual and logical correctness, and hallucination detection.",
   },
   {
     title: "Saliency",
     description:
-      "Verdict judges are capable of generating dense partial rewards, unlike (non-ML) verifiers in settings like mathematics or programming.",
+      "Verdict judges generate rich rewards even in non-verifiable settings, enabling reasoning model progress beyond the current frontiers of mathematics and programming."
   },
   {
     title: "Efficiency",
     description:
-      "Verdict judges are just as powerful as –– if not more powerful than –– o1-style models at evaluation while being much lower-latency and cost-efficient. This is necessary for any method leveraging heavy inference-time compute.",
+      "Verdict judges are just as powerful as –– if not more powerful than –– o1-style models at evaluation, while incurring only a fraction of the latency and cost.",
   },
 ];
 

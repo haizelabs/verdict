@@ -21,20 +21,20 @@ const Hero = () => {
           </div>
           <div className="text-2xl tracking-wide uppercase font-medium text-muted-foreground pt-2">
             <div>
-              <a href="https://haizelabs.com" className="font-semibold text-primary hover:underline decoration-[3px] underline-offset-4">Haize Labs</a>
+              <a href="https://haizelabs.com" className="font-semibold text-primary hover:underline decoration-[3px] underline-offset-4 tracking-widest">Haize Labs</a>
             </div>
           </div>
           <div className="text-base tracking-wide uppercase text-muted-foreground mt-6">
             <div className="space-x-6 flex flex-row justify-center font-light mb-4">
               <div>
-                <a href="https://nimit.io" className="hover:underline decoration-[2px] underline-offset-4">Nimit Kalra</a>
+                <a href="https://nimit.io" className="hover:underline decoration-[2px] underline-offset-4 tracking-widest">Nimit Kalra</a>
               </div>
               <div>
-                <a href="https://leonardtang.me/tabs/about" className="hover:underline decoration-[2px] underline-offset-4">Leonard Tang</a>
+                <a href="https://leonardtang.me/tabs/about" className="hover:underline decoration-[2px] underline-offset-4 tracking-widest">Leonard Tang</a>
               </div>
             </div>
             <div className="font-light tracking-widest">
-              New York City  
+              Made in New York City  
             </div>
           </div>
         </div>
