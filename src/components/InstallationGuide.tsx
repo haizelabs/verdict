@@ -1,14 +1,21 @@
-
+import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Terminal, Code2, Rocket } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { FiClipboard } from "react-icons/fi";
 import { vs } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { exec } from "child_process";
 
 const InstallationGuide = () => {
   const { toast } = useToast();
+  const [isRendering, setIsRendering] = useState(true);
+
+  useEffect(() => {
+    // Wait until all syntax highlighting is applied
+    const timeout = setTimeout(() => setIsRendering(false), 700); // Adjust timing if needed
+    return () => clearTimeout(timeout);
+  }, []);
+
   const handleCopy = (content) => {
     navigator.clipboard.writeText(content);
     toast({
@@ -16,25 +23,6 @@ const InstallationGuide = () => {
       description: "The command has been copied to your clipboard.",
       duration: 1000,
     });
-  };
-
-  // Customize the VS theme with retro-inspired colors
-  const customStyle = {
-    ...vs,
-    'code[class*="language-"]': {
-      ...vs['code[class*="language-"]'],
-      background: 'hsl(220, 10%, 98%)', // Much more muted, almost white background
-      color: 'hsl(220, 25%, 25%)', // Darker text for better contrast
-      fontSize: '0.9rem', // Slightly smaller font size
-      fontFamily: "'SF Mono', monospace", // Matching the site's font
-      lineHeight: '1.6',
-    },
-    'pre[class*="language-"]': {
-      ...vs['pre[class*="language-"]'],
-      background: 'hsl(220, 10%, 98%)', // Matching background
-      border: '1px solid hsl(var(--primary))', // Thinner border
-      boxShadow: '2px 2px 0px 0px hsl(var(--primary))', // Smaller shadow to match
-    },
   };
 
   const SyntaxHighlightedContent = ({
@@ -48,9 +36,9 @@ const InstallationGuide = () => {
       <div className="syntax-highlighter-container relative group">
         <SyntaxHighlighter
           language={language}
-          style={customStyle}
-          customStyle={{ 
-            borderRadius: "0.5rem", 
+          style={vs}
+          customStyle={{
+            borderRadius: "0.5rem",
             padding: "1rem",
             backgroundColor: "hsl(220, 10%, 98%)",
           }}
@@ -67,7 +55,6 @@ const InstallationGuide = () => {
       </div>
     );
   };
-
 
   const installation = `# using pip...
 pip install verdict
@@ -121,53 +108,42 @@ df, _ = pipeline.run_from_dataset(dataset["claude"], display=True)
 print(df)
 `;
 
-const execute = `python quickstart.py`;
+  const execute = `python quickstart.py`;
 
   return (
     <section className="py-6 fade-in overflow-hidden">
       <div className="mx-auto px-4 sm:px-6">
+        {isRendering ? (
+          <div className="flex justify-center items-center h-32">
+            <p className="text-primary">Loading...</p>
+          </div>
+        ) : (
+          <div className="space-y-6 sm:space-y-8">
+            <Card className="hover:shadow-xl transition-all duration-300 bg-popover w-full max-w-full">
+              <CardContent className="p-4 sm:p-6 w-full">
+                <div className="flex flex-wrap items-center gap-2 mb-3 sm:mb-4">
+                  <Terminal className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg sm:text-xl font-semibold">
+                    Installation
+                  </h3>
+                </div>
+                <SyntaxHighlightedContent language="python" content={installation} />
+              </CardContent>
+            </Card>
 
-        <div className="space-y-6 sm:space-y-8">
-          <Card className="hover:shadow-xl transition-all duration-300 bg-popover w-full max-w-full">
-            <CardContent className="p-4 sm:p-6 w-full">
-              <div className="flex flex-wrap items-center gap-2 mb-3 sm:mb-4">
-                <Terminal className="h-5 w-5 text-primary" />
-                <h3 className="text-lg sm:text-xl font-semibold">
-                  Installation
-                </h3>
-              </div>
-              <div className="bg-transparent rounded-md text-sm overflow-x-auto max-w-full">
-                <SyntaxHighlightedContent
-                  language="python"
-                  content={installation}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-xl transition-all duration-300 bg-popover w-full max-w-full">
-            <CardContent className="p-4 sm:p-6 w-full">
-              <div className="flex flex-wrap items-center gap-2 mb-3 sm:mb-4">
-                <Rocket className="h-5 w-5 text-primary" />
-                <h3 className="text-lg sm:text-xl font-semibold">Quickstart</h3>
-              </div>
-              <div className="space-y-3 sm:space-y-4">
-                <p className="text-muted-foreground text-sm sm:text-base">
-                  Get started with a simple example:
-                </p>
-                <div className="bg-transparent rounded-md text-sm overflow-x-auto max-w-full">
-                  <SyntaxHighlightedContent language="python" content={prereqs} />
+            <Card className="hover:shadow-xl transition-all duration-300 bg-popover w-full max-w-full">
+              <CardContent className="p-4 sm:p-6 w-full">
+                <div className="flex flex-wrap items-center gap-2 mb-3 sm:mb-4">
+                  <Rocket className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg sm:text-xl font-semibold">Quickstart</h3>
                 </div>
-                <div className="bg-transparent rounded-md text-sm overflow-x-auto max-w-full">
-                  <SyntaxHighlightedContent language="python" content={code} />
-                </div>
-                <div className="bg-transparent rounded-md text-sm overflow-x-auto max-w-full">
-                  <SyntaxHighlightedContent language="python" content={execute} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                <SyntaxHighlightedContent language="python" content={prereqs} />
+                <SyntaxHighlightedContent language="python" content={code} />
+                <SyntaxHighlightedContent language="python" content={execute} />
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </section>
   );
