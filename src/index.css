@@ -7,35 +7,35 @@
 
 @layer base {
   :root {
-    --background: 0 0% 99%; /* Soft White */
-    --foreground: 220 5% 26%; /* Softer Gray Text */
+    --background: 30 20% 97%; /* More muted, slightly cooler background */
+    --foreground: 20 15% 25%; /* Muted Dark Text */
 
-    --card: 0 0% 97%; /* Near White */
-    --card-foreground: 220 5% 22%; /* Slightly Softer Dark Gray */
+    --card: 45 30% 92%; /* Warmer Card Background */
+    --card-foreground: 20 15% 22%; /* Slightly Softer Dark Gray */
 
-    --popover: 0 0% 98%; /* Ultra-Light Gray */
-    --popover-foreground: 220 5% 24%; /* More Readable Dark Gray */
+    --popover: 45 30% 98%; /* Warm White */
+    --popover-foreground: 20 15% 24%; /* Readable Dark Gray */
 
-    --primary: 220 5% 45%; /* Mid Gray */
-    --primary-foreground: 0 0% 99%; /* Off-White */
+    --primary: 15 30% 45%; /* Muted Terra Cotta */
+    --primary-foreground: 45 33% 95%; /* Soft Cream */
 
-    --secondary: 220 4% 85%; /* Light Silver */
-    --secondary-foreground: 220 5% 28%; /* Readable Dark Gray */
+    --secondary: 35 25% 85%; /* Warm Beige */
+    --secondary-foreground: 20 15% 28%; /* Darker Text */
 
-    --muted: 220 4% 90%; /* Even Softer Gray */
-    --muted-foreground: 220 5% 45%; /* Mid Gray for Contrast */
+    --muted: 35 25% 90%; /* Lighter Beige */
+    --muted-foreground: 20 15% 45%; /* Mid Gray */
 
-    --accent: 220 3% 75%; /* Soft Silver */
-    --accent-foreground: 220 5% 22%; /* Slightly Darker Text */
+    --accent: 15 25% 75%; /* Soft Terra Cotta */
+    --accent-foreground: 20 15% 22%; /* Dark Text */
 
-    --destructive: 0 70% 55%; /* Slightly Softer Red */
-    --destructive-foreground: 0 0% 99%; /* Off-White */
+    --destructive: 0 60% 55%; /* Muted Red */
+    --destructive-foreground: 45 33% 95%; /* Soft Cream */
 
-    --border: 220 4% 88%; /* Lighter Gray Border */
-    --input: 220 4% 90%; /* Softer Light Gray */
-    --ring: 220 6% 35%; /* Softer Focus Ring */
+    --border: 35 25% 88%; /* Warm Border */
+    --input: 35 25% 90%; /* Input Background */
+    --ring: 15 30% 35%; /* Darker Terra Cotta */
 
-    --radius: 0.5rem; /* Keeps the Border-Radius the Same */
+    --radius: 0.25rem; /* Reduced border radius for more retro feel */
   }
 }
 
@@ -45,6 +45,10 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-image: 
+      linear-gradient(to right, rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+    background-size: 24px 24px;
   }
 }
 
@@ -65,7 +69,7 @@
 }
 
 body {
-  font-family: 'PT MONO', sans-serif;
+  font-family: 'SF Mono', monospace;
 }
 
 .syntax-highlighter-container {
@@ -84,4 +88,18 @@ body {
   &:hover {
     opacity: 1;
   }
+}
+
+/* Retro button styles */
+.button-retro {
+  @apply border-2 border-primary shadow-[3px_3px_0px_0px] shadow-primary transition-all duration-200;
+}
+
+.button-retro:hover {
+  @apply translate-x-[2px] translate-y-[2px] shadow-[1px_1px_0px_0px];
+}
+
+/* Retro card styles */
+.card-retro {
+  @apply border-2 border-primary bg-card shadow-[4px_4px_0px_0px] shadow-primary;
 }

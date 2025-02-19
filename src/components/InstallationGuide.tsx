@@ -1,9 +1,10 @@
+
 import { Card, CardContent } from "@/components/ui/card";
 import { Terminal, Code2, Rocket } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { FiClipboard } from "react-icons/fi";
-import { solarizedlight } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { vs } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 const InstallationGuide = () => {
   const { toast } = useToast();
@@ -16,6 +17,25 @@ const InstallationGuide = () => {
     });
   };
 
+  // Customize the VS theme with retro-inspired colors
+  const customStyle = {
+    ...vs,
+    'code[class*="language-"]': {
+      ...vs['code[class*="language-"]'],
+      background: 'hsl(220, 10%, 98%)', // Much more muted, almost white background
+      color: 'hsl(220, 25%, 25%)', // Darker text for better contrast
+      fontSize: '0.9rem', // Slightly smaller font size
+      fontFamily: "'SF Mono', monospace", // Matching the site's font
+      lineHeight: '1.6',
+    },
+    'pre[class*="language-"]': {
+      ...vs['pre[class*="language-"]'],
+      background: 'hsl(220, 10%, 98%)', // Matching background
+      border: '1px solid hsl(var(--primary))', // Thinner border
+      boxShadow: '2px 2px 0px 0px hsl(var(--primary))', // Smaller shadow to match
+    },
+  };
+
   const SyntaxHighlightedContent = ({
     language,
     content,
@@ -24,24 +44,25 @@ const InstallationGuide = () => {
     content: string;
   }) => {
     return (
-      <div className="syntax-highlighter-container bg-transparent">
+      <div className="syntax-highlighter-container relative group">
         <SyntaxHighlighter
           language={language}
-          style={solarizedlight}
-          customStyle={{ borderRadius: "1rem", padding: "1rem" }}
+          style={customStyle}
+          customStyle={{ 
+            borderRadius: "0.5rem", 
+            padding: "1rem",
+            backgroundColor: "hsl(220, 10%, 98%)",
+          }}
         >
           {content}
         </SyntaxHighlighter>
-        <FiClipboard
-          style={{
-            color: "black",
-            // backgroundColor: "lightgray",
-            // padding: "5px",
-            // borderRadius: "4px",
-          }}
-          className="copy-icon"
+        <button
           onClick={() => handleCopy(content)}
-        />
+          className="absolute top-4 right-4 p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200
+            border border-primary hover:bg-primary/10 rounded"
+        >
+          <FiClipboard className="w-4 h-4 text-primary" />
+        </button>
       </div>
     );
   };

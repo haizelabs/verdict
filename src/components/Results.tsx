@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -14,7 +15,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { ChartNoAxesCombined, ChevronDown } from "lucide-react";
+import { ChartNoAxesCombined, ChevronDown, ArrowDown } from "lucide-react";
 
 const datasets = {
   ExpertQA: [
@@ -27,6 +28,7 @@ const datasets = {
       score: "67.72%",
     },
     { model: "GPT-4o", score: "64.67%" },
+    { model: "o3-mini", score: "63.88%" },
     { model: "Claude-3.5 Sonnet", score: "60.9%" },
     { model: "Mistral-Large 2", score: "60.8%" },
     { model: "Qwen2.5-72B-Instruct", score: "60.1%" },
@@ -39,7 +41,7 @@ const datasets = {
     { model: "Tülu-3-70B", score: "55.7%" },
   ],
   XSTest: [
-    { model: "VERDICT ⇒ CoTUnit + JudgeUnits + MeanPoolUnit", score: "96.44%" },
+    { model: "VERDICT (GPT-4o) ⇒ CoTUnit + JudgeUnits + MeanPoolUnit", score: "96.44%" },
     { model: "o1", score: "96.00%" },
     { model: "o1 Preview", score: "94.89%" },
     { model: "o1 Mini", score: "95.56%" },
@@ -53,7 +55,7 @@ const datasets = {
     { model: "Llama-Guard-3-8B", score: "90.44%" },
   ],
   JudgeBench: [
-    { model: "VERDICT ⇒ ArgumentUnits + JudgeUnit", score: "63.55%" },
+    { model: "VERDICT (GPT-4o) ⇒ ArgumentUnits + JudgeUnit", score: "63.55%" },
     { model: "o1-preview", score: "75.43%" },
     { model: "o1-mini", score: "65.71%" },
     { model: "GPT-4o", score: "56.57%" },
@@ -77,8 +79,8 @@ const Results = () => {
   );
 
   return (
-    <section className="py-4 fade-in">
-      <div className="mx-auto px-2">
+    <section className="py-6 fade-in">
+      <div className="mx-auto px-4 sm:px-6">
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-3 mb-6">
             <ChartNoAxesCombined className="h-6 w-6 text-primary" />
@@ -118,23 +120,45 @@ const Results = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead className="font-bold">JUDGE</TableHead>
-                  <TableHead className="font-bold text-right">SCORE</TableHead>
+                  <TableHead className="font-bold text-right flex items-center justify-end gap-1">
+                    SCORE <ArrowDown className="h-4 w-4 inline-block" />
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedResults.map((result, index) => (
+                {sortedResults.map((result) => (
                   <TableRow
                     key={result.model}
-                    className={index === 0 ? "bg-primary/10" : ""}
+                    className={
+                      (selectedDataset === "JudgeBench" && result.model.startsWith("VERDICT")) ||
+                      ((selectedDataset === "ExpertQA" || selectedDataset === "XSTest") && 
+                        result.model.startsWith("VERDICT") && 
+                        result.score === sortedResults[0].score)
+                        ? "bg-primary/10"
+                        : ""
+                    }
                   >
                     <TableCell
-                      className={index === 0 ? "font-bold text-primary" : ""}
+                      className={
+                        (selectedDataset === "JudgeBench" && result.model.startsWith("VERDICT")) ||
+                        ((selectedDataset === "ExpertQA" || selectedDataset === "XSTest") && 
+                          result.model.startsWith("VERDICT") && 
+                          result.score === sortedResults[0].score)
+                          ? "font-bold text-primary"
+                          : ""
+                      }
                     >
                       {result.model}
                     </TableCell>
                     <TableCell
-                      className={`text-right ${index === 0 ? "font-bold text-primary" : ""
-                        }`}
+                      className={`text-right ${
+                        (selectedDataset === "JudgeBench" && result.model.startsWith("VERDICT")) ||
+                        ((selectedDataset === "ExpertQA" || selectedDataset === "XSTest") && 
+                          result.model.startsWith("VERDICT") && 
+                          result.score === sortedResults[0].score)
+                          ? "font-bold text-primary"
+                          : ""
+                      }`}
                     >
                       {result.score}
                     </TableCell>

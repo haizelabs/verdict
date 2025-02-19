@@ -1,13 +1,18 @@
+
 import { useEffect, useState } from "react";
 import Hero from "@/components/Hero";
 import Abstract from "@/components/Abstract";
 import Features from "@/components/Features";
 import InstallationGuide from "@/components/InstallationGuide";
 import Results from "@/components/Results";
+import Applications from "@/components/Applications";
+import WhyUseVerdict from "@/components/WhyUseVerdict";
 
 const sections = [
-  { id: "installation-guide", label: "Installation Guide" },
+  { id: "installation-guide", label: "Installation" },
   { id: "results", label: "Results" },
+  { id: "applications", label: "Applications" },
+  { id: "why-use-verdict", label: "Why Verdict" },
   { id: "features", label: "Features" },
 ];
 
@@ -25,9 +30,8 @@ const TableOfContents = ({ sections }) => {
           const rect = section.getBoundingClientRect();
           const sectionHeight = rect.bottom - rect.top;
           const visibleHeight = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
-          const visibilityRatio = visibleHeight / sectionHeight; // Percentage of section visible
+          const visibilityRatio = visibleHeight / sectionHeight;
 
-          // Prioritize sections that are mostly visible
           if (visibilityRatio > maxVisibleRatio) {
             maxVisibleRatio = visibilityRatio;
             bestMatch = id;
@@ -42,21 +46,29 @@ const TableOfContents = ({ sections }) => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  const scrollToSection = (id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
   return (
-    <div className="hidden md:block fixed top-24 right-6 bg-white shadow-lg p-4 rounded-2xl border border-gray-300 w-56 z-50 transition-all duration-300 hover:shadow-xl">
-      <h3 className="text-lg font-semibold mb-2 text-gray-800">📌 Table of Contents</h3>
-      <ul className="space-y-2">
+    <div className="hidden xl:block fixed top-24 right-6 card-retro p-4 w-56 z-50 transition-all duration-300">
+      <h3 className="text-lg font-semibold mb-4 text-primary tracking-wide">📌 Contents</h3>
+      <ul className="space-y-3">
         {sections.map(({ id, label }) => (
           <li key={id}>
-            <a
-              href={`#${id}`}
-              className={`block px-3 py-1 rounded-lg transition-all ${activeSection === id
-                  ? "font-bold bg-blue-100 text-blue-600"
-                  : "text-gray-600 hover:bg-gray-100"
-                }`}
+            <button
+              onClick={() => scrollToSection(id)}
+              className={`w-full text-left px-3 py-2 transition-all duration-300 border-2 ${
+                activeSection === id
+                  ? "border-primary bg-primary/10 text-primary font-medium translate-x-1"
+                  : "border-transparent hover:border-primary/50 hover:bg-primary/5"
+              }`}
             >
               {label}
-            </a>
+            </button>
           </li>
         ))}
       </ul>
@@ -69,7 +81,7 @@ const Index = () => {
     <div className="min-h-screen w-full overflow-hidden">
       <main className="w-full mx-auto px-4 lg:px-8 flex flex-col items-center">
         <Hero />
-        <div className="w-full flex flex-wrap md:flex-nowrap justify-center gap-8 lg:gap-16 relative">
+        <div className="w-full flex flex-wrap xl:flex-nowrap justify-center gap-8 lg:gap-16 relative">
           <TableOfContents sections={sections} />
           <div className="w-full max-w-6xl">
             <div id="installation-guide" className="scroll-mt-24">
@@ -78,9 +90,14 @@ const Index = () => {
             <div id="results" className="scroll-mt-24">
               <Results />
             </div>
+            <div id="applications" className="scroll-mt-24">
+              <Applications />
+            </div>
+            <div id="why-use-verdict" className="scroll-mt-24">
+              <WhyUseVerdict />
+            </div>
             <div id="features" className="scroll-mt-24 relative">
               <Features />
-              {/* Ensuring nested sections inside Features are also detected */}
               <div id="verdict-core-features" className="absolute top-0"></div>
             </div>
           </div>
