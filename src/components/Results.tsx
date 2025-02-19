@@ -23,6 +23,7 @@ const datasets = {
       model: "VERDICT (GPT-4o) ⇒ JudgeUnit + JudgeUnit + MaxPoolUnit",
       score: "79.17%",
     },
+    { model: "o1", score: "69.91%" },
     {
       model: "VERDICT (GPT-4o-Mini) ⇒ JudgeUnit + JudgeUnit + MaxPoolUnit",
       score: "67.72%",
@@ -131,9 +132,9 @@ const Results = () => {
                     key={result.model}
                     className={
                       (selectedDataset === "JudgeBench" && result.model.startsWith("VERDICT")) ||
-                      ((selectedDataset === "ExpertQA" || selectedDataset === "XSTest") && 
-                        result.model.startsWith("VERDICT") && 
-                        result.score === sortedResults[0].score)
+                        ((selectedDataset === "ExpertQA" || selectedDataset === "XSTest") &&
+                          result.model.startsWith("VERDICT") &&
+                          result.score === sortedResults[0].score)
                         ? "bg-primary/10"
                         : ""
                     }
@@ -141,9 +142,9 @@ const Results = () => {
                     <TableCell
                       className={
                         (selectedDataset === "JudgeBench" && result.model.startsWith("VERDICT")) ||
-                        ((selectedDataset === "ExpertQA" || selectedDataset === "XSTest") && 
-                          result.model.startsWith("VERDICT") && 
-                          result.score === sortedResults[0].score)
+                          ((selectedDataset === "ExpertQA" || selectedDataset === "XSTest") &&
+                            result.model.startsWith("VERDICT") &&
+                            result.score === sortedResults[0].score)
                           ? "font-bold text-primary"
                           : ""
                       }
@@ -151,14 +152,13 @@ const Results = () => {
                       {result.model}
                     </TableCell>
                     <TableCell
-                      className={`text-right ${
-                        (selectedDataset === "JudgeBench" && result.model.startsWith("VERDICT")) ||
-                        ((selectedDataset === "ExpertQA" || selectedDataset === "XSTest") && 
-                          result.model.startsWith("VERDICT") && 
-                          result.score === sortedResults[0].score)
+                      className={`text-right ${(selectedDataset === "JudgeBench" && result.model.startsWith("VERDICT")) ||
+                          ((selectedDataset === "ExpertQA" || selectedDataset === "XSTest") &&
+                            result.model.startsWith("VERDICT") &&
+                            result.score === sortedResults[0].score)
                           ? "font-bold text-primary"
                           : ""
-                      }`}
+                        }`}
                     >
                       {result.score}
                     </TableCell>
