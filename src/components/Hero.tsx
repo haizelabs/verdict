@@ -8,7 +8,7 @@ const Hero = () => {
       <div className="space-y-6 text-center max-w-6xl mx-auto px-4 fade-in">
         <div className="flex flex-col items-center space-x-4">
           <img
-            src={"../../hero.png"}
+            src={"../../hero-transparent.png"}
             alt="Verdict logo with an example Verdict pipeline diagram in the background"
             className="h-auto w-5/6"
           />
@@ -42,7 +42,7 @@ const Hero = () => {
           </Button>
         </a>
 
-        <a href="https://verdict.haizelabs.com/draft.pdf" target="_blank">
+        <a href="https://verdict.haizelabs.com/whitepaper.pdf" target="_blank">
           <Button variant="outline" className="gap-2 w-40 shadow hover:shadow-lg transition-all font-medium">
             <BookOpen className="h-4 w-4" />
             Read Paper
