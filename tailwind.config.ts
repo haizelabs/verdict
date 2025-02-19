@@ -19,7 +19,7 @@ export default {
 		},
 		extend: {
 			fontFamily: {
-				sans: ['Work Sans', 'sans-serif'],
+				// sans: ['Work Sans', 'sans-serif'],
 			},
 			colors: {
 				border: 'hsl(var(--border))',

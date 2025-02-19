@@ -175,7 +175,7 @@ print(df)
 
   return (
     <section className="py-6 fade-in overflow-hidden">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6">
+      <div className="mx-auto px-4 sm:px-6">
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
           <Terminal className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
           <h2 className="text-2xl sm:text-3xl font-bold">

@@ -17,6 +17,27 @@ import {
 import { ChartNoAxesCombined, ChevronDown } from "lucide-react";
 
 const datasets = {
+  ExpertQA: [
+    {
+      model: "VERDICT (GPT-4o) ⇒ JudgeUnit + JudgeUnit + MaxPoolUnit",
+      score: "79.17%",
+    },
+    {
+      model: "VERDICT (GPT-4o-Mini) ⇒ JudgeUnit + JudgeUnit + MaxPoolUnit",
+      score: "67.72%",
+    },
+    { model: "GPT-4o", score: "64.67%" },
+    { model: "Claude-3.5 Sonnet", score: "60.9%" },
+    { model: "Mistral-Large 2", score: "60.8%" },
+    { model: "Qwen2.5-72B-Instruct", score: "60.1%" },
+    { model: "QwQ-32B-Preview", score: "60.0%" },
+    { model: "GPT-4o-2024-05-13", score: "59.6%" },
+    { model: "Bespoke-Minicheck-7B", score: "59.2%" },
+    { model: "MiniCheck-Flan-T5-L", score: "59.0%" },
+    { model: "Llama-3.1-405B-Instruct", score: "58.5%" },
+    { model: "Llama-3.3-70B-Instruct", score: "58.3%" },
+    { model: "Tülu-3-70B", score: "55.7%" },
+  ],
   XSTest: [
     { model: "VERDICT ⇒ CoTUnit + JudgeUnits + MeanPoolUnit", score: "96.44%" },
     { model: "o1", score: "96.00%" },
@@ -45,32 +66,11 @@ const datasets = {
     { model: "Gemini-1.5-flash", score: "39.71%" },
     { model: "GPT-4o-mini", score: "50.00%" },
   ],
-  ExpertQA: [
-    {
-      model: "VERDICT (GPT-4o) ⇒ JudgeUnit + JudgeUnit + MaxPoolUnit",
-      score: "79.17%",
-    },
-    {
-      model: "VERDICT (GPT-4o-Mini) ⇒ JudgeUnit + JudgeUnit + MaxPoolUnit",
-      score: "67.72%",
-    },
-    { model: "GPT-4o", score: "64.67%" },
-    { model: "Claude-3.5 Sonnet", score: "60.9%" },
-    { model: "Mistral-Large 2", score: "60.8%" },
-    { model: "Qwen2.5-72B-Instruct", score: "60.1%" },
-    { model: "QwQ-32B-Preview", score: "60.0%" },
-    { model: "GPT-4o-2024-05-13", score: "59.6%" },
-    { model: "Bespoke-Minicheck-7B", score: "59.2%" },
-    { model: "MiniCheck-Flan-T5-L", score: "59.0%" },
-    { model: "Llama-3.1-405B-Instruct", score: "58.5%" },
-    { model: "Llama-3.3-70B-Instruct", score: "58.3%" },
-    { model: "Tülu-3-70B", score: "55.7%" },
-  ],
 };
 
 const Results = () => {
   const [selectedDataset, setSelectedDataset] =
-    useState<keyof typeof datasets>("XSTest");
+    useState<keyof typeof datasets>("ExpertQA");
 
   const sortedResults = [...datasets[selectedDataset]].sort(
     (a, b) => parseFloat(b.score) - parseFloat(a.score)
@@ -78,12 +78,12 @@ const Results = () => {
 
   return (
     <section className="py-4 fade-in">
-      <div className="max-w-3xl mx-auto px-2">
+      <div className="mx-auto px-2">
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-3 mb-6">
             <ChartNoAxesCombined className="h-6 w-6 text-primary" />
             <h2 className="text-3xl font-semibold">
-              {selectedDataset} Results
+              Judge Reliability Score
             </h2>
           </div>
           <Popover>
@@ -117,7 +117,7 @@ const Results = () => {
             <Table className="text-sm">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="font-bold">MODEL</TableHead>
+                  <TableHead className="font-bold">JUDGE</TableHead>
                   <TableHead className="font-bold text-right">SCORE</TableHead>
                 </TableRow>
               </TableHeader>
@@ -133,9 +133,8 @@ const Results = () => {
                       {result.model}
                     </TableCell>
                     <TableCell
-                      className={`text-right ${
-                        index === 0 ? "font-bold text-primary" : ""
-                      }`}
+                      className={`text-right ${index === 0 ? "font-bold text-primary" : ""
+                        }`}
                     >
                       {result.score}
                     </TableCell>

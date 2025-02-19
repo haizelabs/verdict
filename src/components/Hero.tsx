@@ -14,22 +14,28 @@ const Hero = () => {
           />
         </div>
         <div className="space-y-1">
-          <div className="text-xl tracking-tight text-foreground">
+          <div>
             <h1 className="text-3xl font-semibold tracking-tight sm:text-3xl bg-clip-text pb-2">
-              A Library for Compound LLM Judge Systems
+              Verdict: A Library for Scaling Judge-Time Compute
             </h1>
-            <span className="font-semibold">
-              <a href="https://nimit.io" class="font-medium text-blue-600 dark:text-blue-500 hover:underline">Nimit Kalra</a>
-            </span>{" "}·{" "}
-            <span className="font-semibold">
-              <a href="https://leonardtang.me/tabs/about" class="font-medium text-blue-600 dark:text-blue-500 hover:underline">Leonard Tang</a>
-            </span>
           </div>
           <div className="text-xl tracking-wide uppercase font-medium text-muted-foreground">
-            <span><a href="https://haizelabs.com" class="font-small text-blue-600 dark:text-blue-500 hover:underline">Haize Labs</a></span>
+            <div>
+              <a href="https://haizelabs.com" className="font-small text-blue-600 dark:text-blue-500 hover:underline">Haize Labs</a>
+            </div>
           </div>
-          <div className="text-sm tracking-wide uppercase text-muted-foreground">
-            New York City
+          <div className="text-base tracking-wide uppercase text-muted-foreground pt-2">
+            <div className="space-x-6 flex flex-row justify-center font-light">
+              <div>
+                <a href="https://nimit.io" className="hover:underline">Nimit Kalra</a>
+              </div>
+              <div>
+                <a href="https://leonardtang.me/tabs/about" className="hover:underline">Leonard Tang</a>
+              </div>
+            </div>
+            <div className="pt-3">
+                New York City  
+              </div>
           </div>
         </div>
       </div>
