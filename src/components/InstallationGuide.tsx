@@ -5,6 +5,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { FiClipboard } from "react-icons/fi";
 import { vs } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { exec } from "child_process";
 
 const InstallationGuide = () => {
   const { toast } = useToast();
@@ -67,86 +68,6 @@ const InstallationGuide = () => {
     );
   };
 
-  const oldCode = `from datasets import load_dataset
-from verdict import Layer, Pipeline
-from verdict.common.cot import CoTUnit
-from verdict.common.judge import PairwiseJudgeUnit
-from verdict import config
-from verdict.dataset import DatasetWrapper
-from verdict.scale import DiscreteScale
-from verdict.schema import Schema
-from verdict.transform import MapUnit
-from verdict.util import ratelimit
-
-ratelimit.disable()
-
-dataset = DatasetWrapper.from_hf(
-    load_dataset("ScalerLab/JudgeBench"),
-    lambda row: Schema.of(
-        question=row["question"],
-        response_A=row["response_A"],
-        response_B=row["response_B"],
-    ),
-    max_samples=10,
-)
-
-dataset_inputs = """
-<prompt>
-{{source.question}}
-</prompt>
-
-<response A>
-{{source.response_A}}
-</response A>
-
-<response B>
-{{source.response_B}}
-</response B>
-""".lstrip()
-
-debate_prompt = f"""
-Given the the following prompt and responses, argue why {{option}} is better a response.
-
-{dataset_inputs}
-"""
-
-pipeline = (
-    Pipeline("Debate")
-    >> Layer(
-        [
-            CoTUnit().prompt(debate_prompt.format(option="Response A")),
-            CoTUnit().prompt(debate_prompt.format(option="Response B")),
-        ],
-    )
-    >> MapUnit(
-        lambda prev_units_output: Schema.of(
-            arguments=f"""
-### Argument for Response A:
-{prev_units_output[0].thinking}
-
-### Argument for Response B:
-{prev_units_output[1].thinking}
-"""
-        )
-    )
-    >> PairwiseJudgeUnit(
-        options=DiscreteScale(values=["Response A", "Response B"])
-    ).prompt(
-        f"""
-        Given the the following prompt, responses, and arguments in favor of each response, determine which response is better. Respond with either "Response A" or "Response B".
-
-        {dataset_inputs}
-
-        <arguments>
-        {{previous.arguments}}
-        </arguments>
-    """
-    )
-)
-
-df, leaf_node_columns = pipeline.run_from_dataset(
-    dataset["claude"], max_workers=512, display=True, graceful=True
-)`;
 
   const installation = `# using pip...
 pip install verdict
@@ -156,8 +77,14 @@ conda create -n verdict python=3.13 # we support python >= 3.9
 conda activate verdict
 uv pip install verdict`;
 
+  const prereqs = `# log into HF for dataset access...
+huggingface-cli login
+  
+# set API key
+export OPENAI_API_KEY=XXXXXXXXXXXXXXXXX`
 
-  const code = `from verdict import Pipeline
+  const code = `# quickstart.py
+from verdict import Pipeline
 from verdict.common.judge import PairwiseJudgeUnit
 from verdict.dataset import DatasetWrapper
 from verdict.schema import Schema
@@ -194,6 +121,8 @@ df, _ = pipeline.run_from_dataset(dataset["claude"], display=True)
 print(df)
 `;
 
+const execute = `python quickstart.py`;
+
   return (
     <section className="py-6 fade-in overflow-hidden">
       <div className="mx-auto px-4 sm:px-6">
@@ -227,7 +156,13 @@ print(df)
                   Get started with a simple example:
                 </p>
                 <div className="bg-transparent rounded-md text-sm overflow-x-auto max-w-full">
+                  <SyntaxHighlightedContent language="python" content={prereqs} />
+                </div>
+                <div className="bg-transparent rounded-md text-sm overflow-x-auto max-w-full">
                   <SyntaxHighlightedContent language="python" content={code} />
+                </div>
+                <div className="bg-transparent rounded-md text-sm overflow-x-auto max-w-full">
+                  <SyntaxHighlightedContent language="python" content={execute} />
                 </div>
               </div>
             </CardContent>
