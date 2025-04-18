@@ -24,6 +24,7 @@ from verdict.util.exceptions import (ConfigurationError,
                                      VerdictExecutionTimeError,
                                      VerdictSystemError)
 from verdict.util.log import logger as base_logger
+from verdict.util.tracing import Tracer, NoOpTracer
 
 
 class CascadingProperty:
@@ -219,7 +220,8 @@ class GraphExecutor:
         self.execution_state = GraphExecutor.State.TERMINATED
         self.is_complete.set()
 
-    def submit(self, tasks: List["Unit"], input_data: Schema, leader: bool=False) -> None: # noqa: F821 # type: ignore[name-defined]
+    def submit(self, tasks: List["Unit"], input_data: Schema, leader: bool=False, tracer: Tracer = None, trace_id: str = None, parent_id: str = None) -> None: # noqa: F821 # type: ignore[name-defined]
+        tracer = tracer or NoOpTracer()
         with self.lock:
             for task in tasks:
                 if getattr(task, "accumulate", False):
@@ -228,9 +230,10 @@ class GraphExecutor:
                     self.input_data_map[task] = input_data
 
                 base_logger.debug(f"Submitting task with input: {input_data.escape()}", unit=".".join(task.prefix))
-                self._try_execute(task, leader)
+                self._try_execute(task, leader, tracer=tracer, trace_id=trace_id, parent_id=parent_id)
 
-    def _try_execute(self, task: "Unit", leader: bool) -> None: # noqa: F821 # type: ignore[name-defined]
+    def _try_execute(self, task: "Unit", leader: bool, tracer: Tracer = None, trace_id: str = None, parent_id: str = None) -> None: # noqa: F821 # type: ignore[name-defined]
+        tracer = tracer or NoOpTracer()
         logger = base_logger.bind(unit=".".join(task.prefix))
         with self.lock:
             if self.is_complete.is_set():
@@ -252,10 +255,10 @@ class GraphExecutor:
                 task.thread_id = next(thread_counter)
 
                 if getattr(task, "lightweight", False):
-                    future = self.lightweight_executor.submit(self._execute_task, task, input_data, leader)
+                    future = self.lightweight_executor.submit(self._execute_task, task, input_data, leader, tracer, trace_id, parent_id)
                     logger.debug("Submitted to lightweight ThreadPoolExecutor")
                 else:
-                    future = self.executor.submit(self._execute_task, task, input_data, leader)
+                    future = self.executor.submit(self._execute_task, task, input_data, leader, tracer, trace_id, parent_id)
                     logger.debug("Submitted to I/O ThreadPoolExecutor")
 
                 future.add_done_callback(lambda _: self._on_task_complete(task))
@@ -263,7 +266,8 @@ class GraphExecutor:
                 self.pending_tasks.add(task)
 
     @base_logger.catch()
-    def _execute_task(self, task: "Unit", input_data: Schema, leader: bool) -> None: # noqa: F821 # type: ignore[name-defined]
+    def _execute_task(self, task: "Unit", input_data: Schema, leader: bool, tracer: Tracer = None, trace_id: str = None, parent_id: str = None) -> None: # noqa: F821 # type: ignore[name-defined]
+        tracer = tracer or NoOpTracer()
         logger = base_logger.bind(unit=".".join(task.prefix), thread_id=task.thread_id)
         if self.is_complete.is_set():
             logger.error("Exiting early since executor has been marked is_complete")
@@ -280,7 +284,7 @@ class GraphExecutor:
             if not task.should_pin_output or leader:
                 if task.should_pin_output:
                     logger.debug("Elected as leader.")
-                output = task.execute(input_data)
+                output = task.execute(input_data, tracer=tracer, trace_id=trace_id, parent_id=parent_id)
                 with task.shared.shared_output:
                     task.shared.output = output
                     task.shared.shared_output.notify_all()
