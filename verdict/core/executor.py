@@ -24,7 +24,7 @@ from verdict.util.exceptions import (ConfigurationError,
                                      VerdictExecutionTimeError,
                                      VerdictSystemError)
 from verdict.util.log import logger as base_logger
-from verdict.util.tracing import Tracer
+from verdict.util.tracing import Tracer, NoOpTracer
 
 
 class CascadingProperty:
