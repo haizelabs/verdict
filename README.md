@@ -44,6 +44,14 @@ pipeline = Pipeline() \
 Verdict judges beat out reasoning models like o1 and o3-mini on evaluation tasks for a fraction of the cost and latency.
 <p align="center"><img src="https://verdict.haizelabs.com/Verdict-Tradeoff.png" alt="Performance vs. Cost/Latency Tradeoff Comparison"></p>
 
+## Quick Overview
+<div align="center">
+<a href="https://www.youtube.com/watch?v=S5YfM4eB0aw">
+  <img src="https://img.youtube.com/vi/S5YfM4eB0aw/0.jpg" alt="Verdict Overview">
+</a>
+</div>
+
+
 ## Table of Contents
 1. [Building Judges that Actually Work](#building-judges-that-actually-work)
 2. [Verdict Scales Up Judge-Time Compute](#verdict-scales-up-judge-time-compute)
