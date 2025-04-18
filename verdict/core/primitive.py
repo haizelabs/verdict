@@ -245,13 +245,30 @@ class Unit(Node, Task,
     def execute(
             self,
             input: InputSchemaT,
-            tracer: Tracer = None,
-            trace_id: str = None,
-            parent_id: str = None
+            tracer: Optional[Tracer] = None,
+            trace_id: Optional[str] = None,
+            parent_id: Optional[str] = None
         ) -> OutputSchemaT:
+        """
+        Execute the unit with tracing.
+
+        Args:
+            input: The input schema.
+            tracer: The tracer to use for this execution.
+            trace_id: The trace ID (optional, usually handled by context).
+            parent_id: The parent call ID (optional, usually handled by context).
+
+        Returns:
+            The output schema.
+        """
         tracer = tracer or NoOpTracer()
+        call_name = (
+            getattr(self, "_char", None)
+            or getattr(self, "char", None)
+            or self.__class__.__name__
+        )
         with tracer.start_call(
-            name="Unit.execute",
+            name=call_name,
             inputs={"input": input, "unit": self},
             trace_id=trace_id,
             parent_id=parent_id,
@@ -355,7 +372,6 @@ class Unit(Node, Task,
                     except Exception as e:
                         raise PropagateError() from e
                 except VerdictDeclarationTimeError as e:
-                    # These will likely not be helped by a retry. There is likely something wrong with the user-code/configuration.
                     logger.info("User-code/configuration error detected.")
                     raise e
                 except Exception as e:

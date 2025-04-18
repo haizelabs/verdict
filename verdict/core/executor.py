@@ -189,7 +189,7 @@ class GraphExecutor:
         FAILURE = 2
         TERMINATED = 3
 
-    def __init__(self, max_workers: Optional[int] = None) -> None:
+    def __init__(self, max_workers: Optional[int] = None, tracer: Optional[Tracer] = None) -> None:
         soft_fd_limit, hard_fd_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
         requested_soft_fd_limit = min(hard_fd_limit, max(soft_fd_limit, 5_000_000)) # TODO: make this a function of max_workers
         if requested_soft_fd_limit <= hard_fd_limit:
@@ -212,6 +212,10 @@ class GraphExecutor:
 
         self.outputs: Dict[Task, Schema] = {}
         self.input_data_map: Dict[Task, Schema] = {}
+        self.task_to_call_id: Dict[Task, str] = {}  # Track call_id for each task
+        self.task_to_trace_id: Dict[Task, str] = {}  # Track trace_id for each task
+
+        self.tracer: Tracer = tracer or NoOpTracer()
 
         self.pending_tasks: Set[Task] = set()
         self.active_task_count = 0
@@ -220,8 +224,7 @@ class GraphExecutor:
         self.execution_state = GraphExecutor.State.TERMINATED
         self.is_complete.set()
 
-    def submit(self, tasks: List["Unit"], input_data: Schema, leader: bool=False, tracer: Tracer = None, trace_id: str = None, parent_id: str = None) -> None: # noqa: F821 # type: ignore[name-defined]
-        tracer = tracer or NoOpTracer()
+    def submit(self, tasks: List["Unit"], input_data: Schema, leader: bool=False, trace_id: str = None, parent_id: str = None) -> None: # noqa: F821 # type: ignore[name-defined]
         with self.lock:
             for task in tasks:
                 if getattr(task, "accumulate", False):
@@ -229,11 +232,12 @@ class GraphExecutor:
                 else:
                     self.input_data_map[task] = input_data
 
-                base_logger.debug(f"Submitting task with input: {input_data.escape()}", unit=".".join(task.prefix))
-                self._try_execute(task, leader, tracer=tracer, trace_id=trace_id, parent_id=parent_id)
+                self.task_to_trace_id[task] = trace_id
 
-    def _try_execute(self, task: "Unit", leader: bool, tracer: Tracer = None, trace_id: str = None, parent_id: str = None) -> None: # noqa: F821 # type: ignore[name-defined]
-        tracer = tracer or NoOpTracer()
+                base_logger.debug(f"Submitting task with input: {input_data.escape()}", unit=".".join(task.prefix))
+                self._try_execute(task, leader, trace_id=trace_id, parent_id=parent_id)
+
+    def _try_execute(self, task: "Unit", leader: bool, trace_id: str = None, parent_id: str = None) -> None: # noqa: F821 # type: ignore[name-defined]
         logger = base_logger.bind(unit=".".join(task.prefix))
         with self.lock:
             if self.is_complete.is_set():
@@ -255,10 +259,10 @@ class GraphExecutor:
                 task.thread_id = next(thread_counter)
 
                 if getattr(task, "lightweight", False):
-                    future = self.lightweight_executor.submit(self._execute_task, task, input_data, leader, tracer, trace_id, parent_id)
+                    future = self.lightweight_executor.submit(self._execute_task, task, input_data, leader, trace_id, parent_id)
                     logger.debug("Submitted to lightweight ThreadPoolExecutor")
                 else:
-                    future = self.executor.submit(self._execute_task, task, input_data, leader, tracer, trace_id, parent_id)
+                    future = self.executor.submit(self._execute_task, task, input_data, leader, trace_id, parent_id)
                     logger.debug("Submitted to I/O ThreadPoolExecutor")
 
                 future.add_done_callback(lambda _: self._on_task_complete(task))
@@ -266,8 +270,7 @@ class GraphExecutor:
                 self.pending_tasks.add(task)
 
     @base_logger.catch()
-    def _execute_task(self, task: "Unit", input_data: Schema, leader: bool, tracer: Tracer = None, trace_id: str = None, parent_id: str = None) -> None: # noqa: F821 # type: ignore[name-defined]
-        tracer = tracer or NoOpTracer()
+    def _execute_task(self, task: "Unit", input_data: Schema, leader: bool, trace_id: str = None, parent_id: str = None) -> None: # noqa: F821 # type: ignore[name-defined]
         logger = base_logger.bind(unit=".".join(task.prefix), thread_id=task.thread_id)
         if self.is_complete.is_set():
             logger.error("Exiting early since executor has been marked is_complete")
@@ -284,16 +287,28 @@ class GraphExecutor:
             if not task.should_pin_output or leader:
                 if task.should_pin_output:
                     logger.debug("Elected as leader.")
-                output = task.execute(input_data, tracer=tracer, trace_id=trace_id, parent_id=parent_id)
-                with task.shared.shared_output:
-                    task.shared.output = output
-                    task.shared.shared_output.notify_all()
+                # Start the trace for this unit execution and store the call_id
+                call_name = (
+                    getattr(task, "_char", None)
+                    or getattr(task, "char", None)
+                    or task.__class__.__name__
+                )
+                with self.tracer.start_call(
+                    name=call_name,
+                    inputs={"input": input_data, "unit": task},
+                    trace_id=trace_id,
+                    parent_id=parent_id,
+                ) as call:
+                    if call is not None:
+                        self.task_to_call_id[task] = call.call_id
+                    output = task.execute(input_data, tracer=self.tracer, trace_id=trace_id, parent_id=parent_id)
+                    with task.shared.shared_output:
+                        task.shared.output = output
+                        task.shared.shared_output.notify_all()
             else:
                 logger.debug("Waiting for leader to complete.")
                 with task.shared.shared_output:
                     while task.shared.output is None:
-                        # allows other threads to run, but still possibly locks up the ThreadPoolExecutor until the `leader` completes
-                        # since the `leader` is submitted first, this should not cause a deadlock.
                         task.shared.shared_output.wait()#timeout=0.1)
 
                 output = task.shared.output
@@ -331,10 +346,13 @@ class GraphExecutor:
 
             task.completed = True
 
+            trace_id = self.task_to_trace_id.get(task, None)
+
             for dependent in task.dependents:
                 if all(dep.completed for dep in dependent.dependencies):
                     logger.debug(f"Submitting dependent {'.'.join(dependent.prefix)} since all dependencies are complete.")
-                    self._try_execute(dependent, task.leader)
+                    parent_call_id = self.task_to_call_id.get(task, None)
+                    self._try_execute(dependent, task.leader, trace_id=trace_id, parent_id=parent_call_id)
                 else:
                     logger.debug(f"Skipping dependent {'.'.join(dependent.prefix)} since not all dependencies are complete.")
 
@@ -342,7 +360,7 @@ class GraphExecutor:
             for ready_task in ready_tasks:
                 self.pending_tasks.remove(ready_task)
                 logger.debug(f"Submitting unrelated ready task {'.'.join(ready_task.prefix)}", unit="")
-                self._try_execute(ready_task, ready_task.leader)
+                self._try_execute(ready_task, ready_task.leader, trace_id=trace_id, parent_id=None)
 
             self.execution_pool.remove(task)
             self.active_task_count -= 1
