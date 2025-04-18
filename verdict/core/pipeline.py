@@ -21,21 +21,18 @@ from verdict.schema import Schema
 from verdict.util.exceptions import VerdictDeclarationTimeError
 from verdict.util.log import init_logger, logger
 from verdict.util.misc import keyboard_interrupt_safe
-from verdict.util.tracing import Tracer, NoOpTracer
-import uuid
 
 
 class Pipeline:
     name: str
     block: Block
-    executor: GraphExecutor
-    tracer: Tracer
 
-    def __init__(self, name: str='Pipeline', tracer: Tracer = None) -> None:
+    executor: GraphExecutor
+
+    def __init__(self, name: str='Pipeline') -> None:
         super().__init__()
         self.name = name
         self.block = Block()
-        self.tracer = tracer or NoOpTracer()
 
     def copy(self) -> "Pipeline":
         pipeline = Pipeline(self.name)
@@ -86,42 +83,29 @@ class Pipeline:
         logger.info(f"Starting pipeline {self.name}")
         self.executor = GraphExecutor(max_workers=max_workers)
 
-        with self.tracer.start_call(
-            name=f"{self.name}",
-            inputs={
-                "input_data": input_data,
-                "max_workers": max_workers,
-                "display": display,
-                "graceful": graceful,
-            },
-        ) as call:
-            trace_id = call.trace_id if call else None
-            with (rich.live.Live(auto_refresh=True) if display else nullcontext()) as live: # type: ignore
-                context = MaterializationContext(n_instances=1)
-                if display:
-                    context.parent_branch = rich.tree.Tree(self.name)
-                    context.streaming_layout_manager = StreamingLayoutManager(rich.layout.Layout())
+        with (rich.live.Live(auto_refresh=True) if display else nullcontext()) as live: # type: ignore
+            context = MaterializationContext(n_instances=1)
+            if display:
+                context.parent_branch = rich.tree.Tree(self.name)
+                context.streaming_layout_manager = StreamingLayoutManager(rich.layout.Layout())
 
-                    layout = rich.layout.Layout()
-                    layout.split_row(
-                        rich.layout.Layout(rich.panel.Panel(context.parent_branch, title="Execution Tree"), name="execution"),
-                        rich.layout.Layout(rich.panel.Panel(context.streaming_layout_manager.layout, title="Streaming"), name="streaming")
-                    )
+                layout = rich.layout.Layout()
+                layout.split_row(
+                    rich.layout.Layout(rich.panel.Panel(context.parent_branch, title="Execution Tree"), name="execution"),
+                    rich.layout.Layout(rich.panel.Panel(context.streaming_layout_manager.layout, title="Streaming"), name="streaming")
+                )
 
-                    live.update(layout) # type: ignore
+                live.update(layout) # type: ignore
 
-                block_instance, _ = self.block._materialize(context.copy())
-                block_instance.source_input = input_data
-                block_instance.executor = self.executor
+            block_instance, _ = self.block._materialize(context.copy())
+            block_instance.source_input = input_data
+            block_instance.executor = self.executor
 
-                self.executor.submit(block_instance.root_nodes, input_data, tracer=self.tracer, trace_id=trace_id) # type: ignore
-                self.executor.wait_for_completion(graceful=graceful)
-                outputs, leaf_node_prefixes = self.collect_outputs(self.executor, block_instance)
-                if call:
-                    call.set_outputs({"outputs": outputs, "leaf_node_prefixes": leaf_node_prefixes})
-        
+            self.executor.submit(block_instance.root_nodes, input_data) # type: ignore
+            self.executor.wait_for_completion(graceful=graceful)
+
         logger.info(f"Pipeline {self.name} completed")
-        return outputs, leaf_node_prefixes
+        return self.collect_outputs(self.executor, block_instance)
 
     @keyboard_interrupt_safe
     def run_from_dataset(self,
