@@ -37,6 +37,7 @@ from verdict.util.exceptions import (ConfigurationError, PostProcessError,
                                      VerdictExecutionTimeError)
 from verdict.util.log import logger as base_logger
 from verdict.util.misc import DisableLogger
+from verdict.util.tracing import Tracer, NoOpTracer, ExecutionContext
 
 
 class Previous:
@@ -243,113 +244,136 @@ class Unit(Node, Task,
 
     def execute(
             self,
-            input: InputSchemaT
+            input: InputSchemaT,
+            execution_context: Optional[ExecutionContext] = None
         ) -> OutputSchemaT:
-        logger = base_logger.bind(thread_id=self.thread_id, unit='.'.join(self.prefix))
-        logger.info("Started Unit.execute()")
+        """
+        Execute the unit with tracing.
 
-        if self.model_selection_policy is None:
-            self.model_selection_policy = config.DEFAULT_MODEL_SELECTION_POLICY
-            logger.debug(f"Using default model selection policy: {self.model_selection_policy}")
+        Args:
+            input: The input schema.
+            execution_context: The execution context for this execution (tracing, IDs, etc).
 
-        if self.should_stream_output and self.streaming_layout_manager:
-            streaming_layout = self.streaming_layout_manager.add(self)
+        Returns:
+            The output schema.
+        """
+        if execution_context is None:
+            execution_context = ExecutionContext()
+        call_name = (
+            getattr(self, "_char", None)
+            or getattr(self, "char", None)
+            or self.__class__.__name__
+        )
+        with execution_context.trace_call(
+            name=call_name,
+            inputs={"input": input, "unit": self},
+        ) as call:
+            logger = base_logger.bind(thread_id=self.thread_id, unit='.'.join(self.prefix))
+            logger.info("Started Unit.execute()")
 
-        exceptions: List[Exception] = []
-        for attempt_num, client in enumerate(self.model_selection_policy.get_clients()):
-            logger.info(f"Starting attempt {attempt_num+1} of {len(self.model_selection_policy)}")
+            if self.model_selection_policy is None:
+                self.model_selection_policy = config.DEFAULT_MODEL_SELECTION_POLICY
+                logger.debug(f"Using default model selection policy: {self.model_selection_policy}")
 
-            try:
-                logger.debug(f"Received input: {input.escape()}")
+            if self.should_stream_output and self.streaming_layout_manager:
+                streaming_layout = self.streaming_layout_manager.add(self)
 
-                conformed_input: Schema = input
-                if not self.InputSchema.is_empty():
-                    conformed_input = input.conform(self.InputSchema, logger)
-                    logger.debug(f"Conformed input to {self.InputSchema}: {conformed_input.escape()}")
-
-                if not hasattr(self, '_prompt'):
-                    raise ConfigurationError("Unit must define a prompt.")
-
-                prompt_message: PromptMessage = self.populate_prompt_message(conformed_input, logger)
-                logger.debug(f"Populated system prompt: {prompt_message.system}")
-                logger.debug(f"Populated user prompt: {prompt_message.user}")
-
-                in_tokens = len(client.encode(prompt_message.user))
-                out_tokens_estimate = np.mean(self.shared.output_tokens or [0.0]).item()
-                ready = client.model.rate_limit.acquire({
-                    'requests': 1,
-                    'tokens': int(in_tokens + out_tokens_estimate)
-                })
-                logger.debug(f"Prepared in_tokens={in_tokens}, estimated out_tokens={out_tokens_estimate}")
-                if (waiting := not ready.is_set()):
-                    logger.debug("Rate limit reached. Waiting...")
-                ready.wait()
-                if waiting:
-                    logger.debug("Below rate limit again. Resuming...")
-
-                extractor: Extractor = self.extractor() if isinstance(self.extractor, type) else self.extractor
-                extractor.inject(unit=self)
-                logger.debug(f"Using extractor: {extractor}")
-
-                # exit early right before the inference call
-                if self.executor.is_complete.is_set():
-                    logger.error("Exiting early since executor has been marked is_complete")
-                    return # type: ignore
+            exceptions: List[Exception] = []
+            for attempt_num, client in enumerate(self.model_selection_policy.get_clients()):
+                logger.info(f"Starting attempt {attempt_num+1} of {len(self.model_selection_policy)}")
 
                 try:
-                    with DisableLogger('LiteLLM'):
-                        response_stream, usage = extractor.extract(client, prompt_message, logger)
-                        logger.info("Inference call succeeded")
+                    logger.debug(f"Received input: {input.escape()}")
+
+                    conformed_input: Schema = input
+                    if not self.InputSchema.is_empty():
+                        conformed_input = input.conform(self.InputSchema, logger)
+                        logger.debug(f"Conformed input to {self.InputSchema}: {conformed_input.escape()}")
+
+                    if not hasattr(self, '_prompt'):
+                        raise ConfigurationError("Unit must define a prompt.")
+
+                    prompt_message: PromptMessage = self.populate_prompt_message(conformed_input, logger)
+                    logger.debug(f"Populated system prompt: {prompt_message.system}")
+                    logger.debug(f"Populated user prompt: {prompt_message.user}")
+
+                    in_tokens = len(client.encode(prompt_message.user))
+                    out_tokens_estimate = np.mean(self.shared.output_tokens or [0.0]).item()
+                    ready = client.model.rate_limit.acquire({
+                        'requests': 1,
+                        'tokens': int(in_tokens + out_tokens_estimate)
+                    })
+                    logger.debug(f"Prepared in_tokens={in_tokens}, estimated out_tokens={out_tokens_estimate}")
+                    if (waiting := not ready.is_set()):
+                        logger.debug("Rate limit reached. Waiting...")
+                    ready.wait()
+                    if waiting:
+                        logger.debug("Below rate limit again. Resuming...")
+
+                    extractor: Extractor = self.extractor() if isinstance(self.extractor, type) else self.extractor
+                    extractor.inject(unit=self)
+                    logger.debug(f"Using extractor: {extractor}")
+
+                    # exit early right before the inference call
+                    if self.executor.is_complete.is_set():
+                        logger.error("Exiting early since executor has been marked is_complete")
+                        return # type: ignore
+
+                    try:
+                        with DisableLogger('LiteLLM'):
+                            response_stream, usage = extractor.extract(client, prompt_message, logger)
+                            logger.info("Inference call succeeded")
+                    except Exception as e:
+                        logger.error(f"Inference call failed: {e}")
+                        raise VerdictExecutionTimeError() from e
+
+                    if isinstance(response_stream, Iterator):
+                        logger.debug("Received streaming response")
+                        for response in response_stream:
+                            if self.should_stream_output and self.streaming_layout_manager and streaming_layout:
+                                streaming_layout.update(response)
+                    else:
+                        response = response_stream
+                    logger.debug(f"Received response: {response.escape()}")
+
+                    out_tokens = usage.out_tokens
+                    if usage.is_unknown() or usage.out_tokens == -1:
+                        out_tokens = len(client.encode(str(response.model_dump()) if isinstance(response, Schema) else response))
+                    self.shared.output_tokens.append(out_tokens)
+                    client.model.rate_limit.release({
+                        'tokens': min(int(out_tokens - out_tokens_estimate), 0)
+                    })
+                    logger.debug(f"Received out_tokens={out_tokens}")
+
+                    try:
+                        self.validate(conformed_input, response)
+                    except Exception as e:
+                        raise PostValidationError() from e
+                    logger.debug("Unit.validate() successful")
+
+                    try:
+                        output = self.process(conformed_input, response)
+                    except Exception as e:
+                        raise PostProcessError() from e
+                    logger.debug("Unit.process() successful")
+
+                    try:
+                        result = self._propagator(self, Previous(self.dependencies), conformed_input, output) # type: ignore
+                        logger.debug(f"Propagated result: {result}")
+                        logger.info("Unit.execute() successful")
+                        if call is not None:
+                            call.set_outputs(result)
+                        return result
+                    except Exception as e:
+                        raise PropagateError() from e
+                except VerdictDeclarationTimeError as e:
+                    logger.info("User-code/configuration error detected.")
+                    raise e
                 except Exception as e:
-                    logger.error(f"Inference call failed: {e}")
-                    raise VerdictExecutionTimeError() from e
+                    exceptions.append(e)
+                    logger.info(f"Retrying after exception encountered: {e}")
 
-                if isinstance(response_stream, Iterator):
-                    logger.debug("Received streaming response")
-                    for response in response_stream:
-                        if self.should_stream_output and self.streaming_layout_manager and streaming_layout:
-                            streaming_layout.update(response)
-                else:
-                    response = response_stream
-                logger.debug(f"Received response: {response.escape()}")
-
-                out_tokens = usage.out_tokens
-                if usage.is_unknown() or usage.out_tokens == -1:
-                    out_tokens = len(client.encode(str(response.model_dump()) if isinstance(response, Schema) else response))
-                self.shared.output_tokens.append(out_tokens)
-                client.model.rate_limit.release({
-                    'tokens': min(int(out_tokens - out_tokens_estimate), 0)
-                })
-                logger.debug(f"Received out_tokens={out_tokens}")
-
-                try:
-                    self.validate(conformed_input, response)
-                except Exception as e:
-                    raise PostValidationError() from e
-                logger.debug("Unit.validate() successful")
-
-                try:
-                    output = self.process(conformed_input, response)
-                except Exception as e:
-                    raise PostProcessError() from e
-                logger.debug("Unit.process() successful")
-
-                try:
-                    result = self._propagator(self, Previous(self.dependencies), conformed_input, output) # type: ignore
-                    logger.debug(f"Propagated result: {result}")
-                    logger.info("Unit.execute() successful")
-                    return result
-                except Exception as e:
-                    raise PropagateError() from e
-            except VerdictDeclarationTimeError as e:
-                # These will likely not be helped by a retry. There is likely something wrong with the user-code/configuration.
-                logger.info("User-code/configuration error detected.")
-                raise e
-            except Exception as e:
-                exceptions.append(e)
-                logger.info(f"Retrying after exception encountered: {e}")
-
-        raise VerdictExecutionTimeError(f"Model Selection Policy {self.model_selection_policy} exhausted") from exceptions[-1]
+            raise VerdictExecutionTimeError(f"Model Selection Policy {self.model_selection_policy} exhausted") from exceptions[-1]
 
     def validate(self, input: InputSchemaT, response: ResponseSchemaT) -> None:
         pass
