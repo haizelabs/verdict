@@ -21,7 +21,7 @@ from verdict.schema import Schema
 from verdict.util.exceptions import VerdictDeclarationTimeError
 from verdict.util.log import init_logger, logger
 from verdict.util.misc import keyboard_interrupt_safe
-from verdict.util.tracing import Tracer, NoOpTracer, TracingManager
+from verdict.util.tracing import Tracer, NoOpTracer, TracingManager, ExecutionContext, ensure_tracing_manager
 import uuid
 
 
@@ -29,27 +29,21 @@ import uuid
 class Pipeline:
     name: str
     block: Block
-
     executor: GraphExecutor
-    tracer: Tracer
+    default_tracer: Optional[Union[Tracer, List[Tracer]]]
 
-    def __init__(self, name: str = 'Pipeline', tracer: Optional[Tracer] = None) -> None:
+    def __init__(self, name: str = 'Pipeline', tracer: Optional[Union[Tracer, List[Tracer]]] = None) -> None:
         """
         Initialize a Pipeline.
 
         Args:
             name: The name of the pipeline.
-            tracer: The tracer or tracing manager to use. If None, uses NoOpTracer.
+            tracer: The default tracer or list of tracers to use. If None, uses NoOpTracer().
         """
         super().__init__()
         self.name = name
         self.block = Block()
-        if tracer is None:
-            self.tracer = TracingManager([NoOpTracer()])
-        elif isinstance(tracer, TracingManager):
-            self.tracer = tracer
-        else:
-            self.tracer = TracingManager([tracer])
+        self.default_tracer: TracingManager = ensure_tracing_manager(tracer)
 
     def add_tracer(self, tracer: Tracer) -> None:
         """
@@ -58,10 +52,7 @@ class Pipeline:
         Args:
             tracer: The tracer to add.
         """
-        if not isinstance(self.tracer, TracingManager):
-            # Convert current tracer to a TracingManager
-            self.tracer = TracingManager([self.tracer])
-        self.tracer.tracers.append(tracer)
+        self.default_tracer.add_tracer(tracer)
 
     def copy(self) -> "Pipeline":
         pipeline = Pipeline(self.name, tracer=self.tracer)
@@ -105,7 +96,7 @@ class Pipeline:
         max_workers: int = 128,
         display: bool = False,
         graceful: bool = False,
-        tracer: Optional[Tracer] = None,
+        tracers: Optional[Union[Tracer, List[Tracer]]] = None,
     ) -> Tuple[Dict[str, Schema], List[str]]:
         """
         Run the pipeline.
@@ -115,7 +106,7 @@ class Pipeline:
             max_workers: Number of workers.
             display: Whether to display live output.
             graceful: Whether to shut down gracefully.
-            tracer: Optional tracer to override the pipeline's tracer for this run.
+            tracers: Optional tracer(s) to override the pipeline's tracers for this run.
 
         Returns:
             Tuple of outputs and leaf node prefixes.
@@ -123,21 +114,23 @@ class Pipeline:
         self.block = self.block.copy()
         init_logger(self.name)
         logger.info(f"Starting pipeline {self.name}")
-        tracer_to_use = tracer or self.tracer
-        self.executor = GraphExecutor(max_workers=max_workers, tracer=tracer_to_use)
+        if tracers is not None:
+            self.default_tracer = ensure_tracing_manager(tracers)
+        tracer_to_use = self.default_tracer
+        execution_context = ExecutionContext(
+            tracer=tracer_to_use,
+            parent_id=None,
+        )
+        self.executor = GraphExecutor(max_workers=max_workers, execution_context=execution_context)
 
-        trace_id = str(uuid.uuid4())
-        call_name = f"{getattr(self, 'name', None) or self.__class__.__name__}"
-        with tracer_to_use.start_call(
-            name=call_name,
+        with execution_context.trace_call(
+            name=f"{getattr(self, 'name', None) or self.__class__.__name__}",
             inputs={
                 "input_data": input_data,
                 "max_workers": max_workers,
                 "display": display,
                 "graceful": graceful,
             },
-            trace_id=trace_id,
-            parent_id=None,
         ) as call:
             with (rich.live.Live(auto_refresh=True) if display else nullcontext()) as live: # type: ignore
                 context = MaterializationContext(n_instances=1)
@@ -160,8 +153,8 @@ class Pipeline:
                 self.executor.submit(
                     block_instance.root_nodes,
                     input_data,
-                    trace_id=trace_id,
-                    parent_id=call.call_id if call is not None else None,
+                    trace_id=execution_context.trace_id,
+                    parent_id=call.call_id if call is not None else execution_context.call_id,
                 ) # type: ignore
                 self.executor.wait_for_completion(graceful=graceful)
 
@@ -179,7 +172,7 @@ class Pipeline:
         experiment_config=None,
         display: bool = False,
         graceful: bool = False,
-        tracer: Optional[Tracer] = None,
+        tracers: Optional[Union[Tracer, List[Tracer]]] = None,
     ) -> Tuple["pd.DataFrame", List[str]]:
         """
         Run the pipeline on a dataset.
@@ -190,7 +183,7 @@ class Pipeline:
             experiment_config: Experiment config.
             display: Whether to display live output.
             graceful: Whether to shut down gracefully.
-            tracer: Optional tracer to override the pipeline's tracer for this run.
+            tracers: Optional tracer(s) to override the pipeline's tracers for this run.
 
         Returns:
             Tuple of DataFrame and leaf node prefixes.
@@ -198,14 +191,18 @@ class Pipeline:
         self.block = self.block.copy()
         init_logger(self.name)
         logger.info(f"Running pipeline {self.name} on dataset (len={len(dataset)})")
-        tracer_to_use = tracer or self.tracer
-        self.executor = GraphExecutor(max_workers=max_workers, tracer=tracer_to_use)
+        if tracers is not None:
+            self.default_tracer = ensure_tracing_manager(tracers)
+        tracer_to_use = self.default_tracer
+        execution_context = ExecutionContext(
+            tracer=tracer_to_use,
+            parent_id=None,
+        )
+        self.executor = GraphExecutor(max_workers=max_workers, execution_context=execution_context)
 
         dataset_df = dataset.samples.copy()
-        trace_id = str(uuid.uuid4())
-        call_name = f"{getattr(self, 'name', None) or self.__class__.__name__}"
-        with tracer_to_use.start_call(
-            name=call_name,
+        with execution_context.trace_call(
+            name=f"{getattr(self, 'name', None) or self.__class__.__name__}",
             inputs={
                 "dataset": dataset_df,
                 "max_workers": max_workers,
@@ -213,8 +210,6 @@ class Pipeline:
                 "display": display,
                 "graceful": graceful,
             },
-            trace_id=trace_id,
-            parent_id=None,
         ) as call:
             with (rich.live.Live(auto_refresh=True) if display else nullcontext()) as live: # type: ignore
                 block_instances: Dict[str, Block] = {}
@@ -253,8 +248,8 @@ class Pipeline:
                     self.executor.submit(
                         block_instance.root_nodes,
                         input_data,
-                        trace_id=trace_id,
-                        parent_id=call.call_id if call is not None else None,
+                        trace_id=execution_context.trace_id,
+                        parent_id=call.call_id if call is not None else execution_context.call_id,
                     ) # type: ignore
 
                 self.executor.wait_for_completion(graceful=graceful)
@@ -297,7 +292,7 @@ class Pipeline:
         experiment_config=None,
         display: bool = False,
         graceful: bool = False,
-        tracer: Optional[Tracer] = None,
+        tracers: Optional[Union[Tracer, List[Tracer]]] = None,
     ) -> Tuple[Dict[str, Schema], List[str]]:
         """
         Run the pipeline on a list of Schemas.
@@ -308,7 +303,7 @@ class Pipeline:
             experiment_config: Experiment config.
             display: Whether to display live output.
             graceful: Whether to shut down gracefully.
-            tracer: Optional tracer to override the pipeline's tracer for this run.
+            tracers: Optional tracer(s) to override the pipeline's tracers for this run.
 
         Returns:
             Tuple of outputs and leaf node prefixes.
@@ -318,7 +313,7 @@ class Pipeline:
             Dataset.from_list([data.model_dump() for data in dataset])
         )
         return self.run_from_dataset(
-            vedict_dataset, max_workers, experiment_config, display, graceful, tracer=tracer
+            vedict_dataset, max_workers, experiment_config, display, graceful, tracers=tracers
         )
 
     def checkpoint(self, path: Path):

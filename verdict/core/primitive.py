@@ -37,7 +37,7 @@ from verdict.util.exceptions import (ConfigurationError, PostProcessError,
                                      VerdictExecutionTimeError)
 from verdict.util.log import logger as base_logger
 from verdict.util.misc import DisableLogger
-from verdict.util.tracing import Tracer, NoOpTracer
+from verdict.util.tracing import Tracer, NoOpTracer, ExecutionContext
 
 
 class Previous:
@@ -245,33 +245,28 @@ class Unit(Node, Task,
     def execute(
             self,
             input: InputSchemaT,
-            tracer: Optional[Tracer] = None,
-            trace_id: Optional[str] = None,
-            parent_id: Optional[str] = None
+            execution_context: Optional[ExecutionContext] = None
         ) -> OutputSchemaT:
         """
         Execute the unit with tracing.
 
         Args:
             input: The input schema.
-            tracer: The tracer to use for this execution.
-            trace_id: The trace ID (optional, usually handled by context).
-            parent_id: The parent call ID (optional, usually handled by context).
+            execution_context: The execution context for this execution (tracing, IDs, etc).
 
         Returns:
             The output schema.
         """
-        tracer = tracer or NoOpTracer()
+        if execution_context is None:
+            execution_context = ExecutionContext()
         call_name = (
             getattr(self, "_char", None)
             or getattr(self, "char", None)
             or self.__class__.__name__
         )
-        with tracer.start_call(
+        with execution_context.trace_call(
             name=call_name,
             inputs={"input": input, "unit": self},
-            trace_id=trace_id,
-            parent_id=parent_id,
         ) as call:
             logger = base_logger.bind(thread_id=self.thread_id, unit='.'.join(self.prefix))
             logger.info("Started Unit.execute()")

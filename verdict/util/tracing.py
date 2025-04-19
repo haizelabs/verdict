@@ -23,7 +23,7 @@ import contextvars
 from abc import ABC, abstractmethod
 from contextlib import contextmanager, AbstractContextManager
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, List, Iterator, TypeVar, Generic, ContextManager
+from typing import Any, Dict, Optional, List, Iterator, TypeVar, Generic, ContextManager, TYPE_CHECKING, Union
 
 # --- Context Management ---
 
@@ -44,6 +44,7 @@ class TraceContext:
 current_trace_context: contextvars.ContextVar[Optional[TraceContext]] = contextvars.ContextVar(
     "current_trace_context", default=None
 )
+
 
 # --- Call Data Structure ---
 
@@ -134,7 +135,7 @@ class Tracer(ABC):
             A Call object (or None for NoOpTracer).
         """
         pass
-
+    
 # --- TracingManager ---
 
 class TracingManager(Tracer):
@@ -180,6 +181,9 @@ class TracingManager(Tracer):
                 ctx.__exit__(None, None, None)
         finally:
             current_trace_context.reset(token)
+
+    def add_tracer(self, tracer: Tracer) -> None:
+        self.tracers.append(tracer)
 
 # --- NoOpTracer ---
 
@@ -266,3 +270,47 @@ class ConsoleTracer(Tracer):
         if len(s) > maxlen:
             return s[:maxlen] + "..."
         return s
+
+def ensure_tracing_manager(tracer: Optional[Union[Tracer, List[Tracer]]]) -> TracingManager:
+    if tracer is None:
+        return TracingManager([NoOpTracer()])
+    if isinstance(tracer, TracingManager):
+        return tracer
+    if isinstance(tracer, list):
+        return TracingManager(tracer)
+    return TracingManager([tracer])
+
+@dataclass
+class ExecutionContext:
+    """Stores the current execution context, including tracing information and the tracer instance.
+
+    Attributes:
+        tracer: The tracer instance to use for this execution.
+        trace_id: The unique identifier for the trace (spans/calls tree).
+        call_id: The unique identifier for this call/span.
+        parent_id: The call_id of the parent call, if any.
+    """
+    tracer: Tracer = field(default_factory=NoOpTracer)
+    trace_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    call_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    parent_id: Optional[str] = None
+
+    def child(self, call_id: Optional[str] = None) -> 'ExecutionContext':
+        """Create a new context for a child call/span."""
+        return ExecutionContext(
+            tracer=self.tracer,
+            trace_id=self.trace_id,
+            call_id=call_id or str(uuid.uuid4()),
+            parent_id=self.call_id,
+        )
+    
+    @contextmanager
+    def trace_call(self, name: str, inputs: dict):
+        with self.tracer.start_call(
+            name=name,
+            inputs=inputs,
+            trace_id=self.trace_id,
+            parent_id=self.parent_id,
+        ) as call:
+            yield call
+

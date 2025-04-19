@@ -24,7 +24,7 @@ from verdict.util.exceptions import (ConfigurationError,
                                      VerdictExecutionTimeError,
                                      VerdictSystemError)
 from verdict.util.log import logger as base_logger
-from verdict.util.tracing import Tracer, NoOpTracer
+from verdict.util.tracing import ExecutionContext
 
 
 class CascadingProperty:
@@ -189,7 +189,7 @@ class GraphExecutor:
         FAILURE = 2
         TERMINATED = 3
 
-    def __init__(self, max_workers: Optional[int] = None, tracer: Optional[Tracer] = None) -> None:
+    def __init__(self, max_workers: Optional[int] = None, execution_context: Optional['ExecutionContext'] = None) -> None:
         soft_fd_limit, hard_fd_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
         requested_soft_fd_limit = min(hard_fd_limit, max(soft_fd_limit, 5_000_000)) # TODO: make this a function of max_workers
         if requested_soft_fd_limit <= hard_fd_limit:
@@ -215,7 +215,8 @@ class GraphExecutor:
         self.task_to_call_id: Dict[Task, str] = {}  # Track call_id for each task
         self.task_to_trace_id: Dict[Task, str] = {}  # Track trace_id for each task
 
-        self.tracer: Tracer = tracer or NoOpTracer()
+        from verdict.util.tracing import ExecutionContext
+        self.execution_context: ExecutionContext = execution_context or ExecutionContext()
 
         self.pending_tasks: Set[Task] = set()
         self.active_task_count = 0
@@ -224,7 +225,8 @@ class GraphExecutor:
         self.execution_state = GraphExecutor.State.TERMINATED
         self.is_complete.set()
 
-    def submit(self, tasks: List["Unit"], input_data: Schema, leader: bool=False, trace_id: str = None, parent_id: str = None) -> None: # noqa: F821 # type: ignore[name-defined]
+    def submit(self, tasks: List["Unit"], input_data: Schema, leader: bool=False, execution_context: Optional['ExecutionContext']=None, trace_id: str = None, parent_id: str = None) -> None: # noqa: F821 # type: ignore[name-defined]
+        execution_context = execution_context or self.execution_context
         with self.lock:
             for task in tasks:
                 if getattr(task, "accumulate", False):
@@ -232,12 +234,22 @@ class GraphExecutor:
                 else:
                     self.input_data_map[task] = input_data
 
-                self.task_to_trace_id[task] = trace_id
+                # If trace_id or parent_id are provided, create a new ExecutionContext for this task
+                task_execution_context = execution_context
+                if trace_id is not None or parent_id is not None:
+                    task_execution_context = ExecutionContext(
+                        tracer=execution_context.tracer,
+                        trace_id=trace_id or execution_context.trace_id,
+                        parent_id=parent_id if parent_id is not None else execution_context.parent_id,
+                    )
+
+                self.task_to_trace_id[task] = task_execution_context.trace_id
 
                 base_logger.debug(f"Submitting task with input: {input_data.escape()}", unit=".".join(task.prefix))
-                self._try_execute(task, leader, trace_id=trace_id, parent_id=parent_id)
+                self._try_execute(task, leader, execution_context=task_execution_context)
 
-    def _try_execute(self, task: "Unit", leader: bool, trace_id: str = None, parent_id: str = None) -> None: # noqa: F821 # type: ignore[name-defined]
+    def _try_execute(self, task: "Unit", leader: bool, execution_context: Optional['ExecutionContext']=None) -> None: # noqa: F821 # type: ignore[name-defined]
+        execution_context = execution_context or self.execution_context
         logger = base_logger.bind(unit=".".join(task.prefix))
         with self.lock:
             if self.is_complete.is_set():
@@ -259,10 +271,10 @@ class GraphExecutor:
                 task.thread_id = next(thread_counter)
 
                 if getattr(task, "lightweight", False):
-                    future = self.lightweight_executor.submit(self._execute_task, task, input_data, leader, trace_id, parent_id)
+                    future = self.lightweight_executor.submit(self._execute_task, task, input_data, leader, execution_context)
                     logger.debug("Submitted to lightweight ThreadPoolExecutor")
                 else:
-                    future = self.executor.submit(self._execute_task, task, input_data, leader, trace_id, parent_id)
+                    future = self.executor.submit(self._execute_task, task, input_data, leader, execution_context)
                     logger.debug("Submitted to I/O ThreadPoolExecutor")
 
                 future.add_done_callback(lambda _: self._on_task_complete(task))
@@ -270,7 +282,8 @@ class GraphExecutor:
                 self.pending_tasks.add(task)
 
     @base_logger.catch()
-    def _execute_task(self, task: "Unit", input_data: Schema, leader: bool, trace_id: str = None, parent_id: str = None) -> None: # noqa: F821 # type: ignore[name-defined]
+    def _execute_task(self, task: "Unit", input_data: Schema, leader: bool, execution_context: Optional['ExecutionContext']=None) -> None: # noqa: F821 # type: ignore[name-defined]
+        execution_context = execution_context or self.execution_context
         logger = base_logger.bind(unit=".".join(task.prefix), thread_id=task.thread_id)
         if self.is_complete.is_set():
             logger.error("Exiting early since executor has been marked is_complete")
@@ -293,15 +306,13 @@ class GraphExecutor:
                     or getattr(task, "char", None)
                     or task.__class__.__name__
                 )
-                with self.tracer.start_call(
+                with execution_context.trace_call(
                     name=call_name,
                     inputs={"input": input_data, "unit": task},
-                    trace_id=trace_id,
-                    parent_id=parent_id,
                 ) as call:
                     if call is not None:
                         self.task_to_call_id[task] = call.call_id
-                    output = task.execute(input_data, tracer=self.tracer, trace_id=trace_id, parent_id=parent_id)
+                    output = task.execute(input_data, execution_context=execution_context)
                     with task.shared.shared_output:
                         task.shared.output = output
                         task.shared.shared_output.notify_all()
@@ -352,7 +363,12 @@ class GraphExecutor:
                 if all(dep.completed for dep in dependent.dependencies):
                     logger.debug(f"Submitting dependent {'.'.join(dependent.prefix)} since all dependencies are complete.")
                     parent_call_id = self.task_to_call_id.get(task, None)
-                    self._try_execute(dependent, task.leader, trace_id=trace_id, parent_id=parent_call_id)
+                    dependent_execution_context = ExecutionContext(
+                        tracer=self.execution_context.tracer,
+                        trace_id=self.task_to_trace_id.get(task, self.execution_context.trace_id),
+                        parent_id=parent_call_id,
+                    )
+                    self._try_execute(dependent, task.leader, execution_context=dependent_execution_context)
                 else:
                     logger.debug(f"Skipping dependent {'.'.join(dependent.prefix)} since not all dependencies are complete.")
 
@@ -360,7 +376,7 @@ class GraphExecutor:
             for ready_task in ready_tasks:
                 self.pending_tasks.remove(ready_task)
                 logger.debug(f"Submitting unrelated ready task {'.'.join(ready_task.prefix)}", unit="")
-                self._try_execute(ready_task, ready_task.leader, trace_id=trace_id, parent_id=None)
+                self._try_execute(ready_task, ready_task.leader, execution_context=self.execution_context)
 
             self.execution_pool.remove(task)
             self.active_task_count -= 1
