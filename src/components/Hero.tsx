@@ -47,7 +47,7 @@ const Hero = () => {
           </Button>
         </a>
 
-        <a href="https://verdict.haizelabs.com/whitepaper.pdf" target="_blank">
+        <a href="https://arxiv.org/abs/2502.18018" target="_blank">
           <Button variant="outline" className="button-retro w-40 font-medium">
             <BookOpen className="h-4 w-4" />
             Paper
