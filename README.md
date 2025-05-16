@@ -51,6 +51,12 @@ Verdict judges beat out reasoning models like o1 and o3-mini on evaluation tasks
 </a>
 </div>
 
+<div align="center">
+<a href="https://www.youtube.com/watch?v=KFrKLkJzNDQ">
+  <img src="https://img.youtube.com/vi/KFrKLkJzNDQ/0.jpg" alt="Scaling Judge-Time Compute">
+</a>
+</div>
+
 
 ## Table of Contents
 1. [Building Judges that Actually Work](#building-judges-that-actually-work)
