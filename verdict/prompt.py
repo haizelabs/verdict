@@ -87,7 +87,7 @@ class PromptMessage(NamedTuple):
         nonce = ''.join(random.choices(string.ascii_letters, k=10)) + '\n' if add_nonce else ''
         messages = [{"role": "user", "content": nonce + self.user}]
         if self.system:
-            messages.append({"role": "system", "content": nonce + self.system})
+            messages.insert(0, {"role": "system", "content": nonce + self.system})
         return messages
 
 RESERVED_KEYS = set(["input", "unit", "previous", "source", "prompt"])
