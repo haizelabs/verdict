@@ -2,7 +2,7 @@
 
 [<img src="https://verdict.haizelabs.com/hero.png?" alt="Verdict Logo" width="77.8%"/>](https://verdict.haizelabs.com/docs)
 
-**[Whitepaper](https://verdict.haizelabs.com/whitepaper.pdf) | [Docs](https://verdict.haizelabs.com/docs) | [Results](https://verdict.haizelabs.com) | `pip install verdict`**
+**[arXiv](https://arxiv.org/abs/2502.18018) | [Docs](https://verdict.haizelabs.com/docs) | [Results](https://verdict.haizelabs.com) | `pip install verdict`**
 
 [![PyPI version](https://img.shields.io/pypi/v/verdict)](https://pypi.org/project/verdict/)
 [![Downloads](https://img.shields.io/pypi/dm/verdict)](https://pypistats.org/packages/verdict)
