@@ -16,16 +16,26 @@ Key classes:
 Usage examples are provided at the end of the file.
 """
 
-import time
+import contextvars
 import threading
 import uuid
-import contextvars
 from abc import ABC, abstractmethod
 from contextlib import contextmanager, AbstractContextManager
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, List, Iterator, TypeVar, Generic, ContextManager, TYPE_CHECKING, Union
+from typing import (
+    Any,
+    Dict,
+    Optional,
+    List,
+    Iterator,
+    Union,
+)
+
+import time
+
 
 # --- Context Management ---
+
 
 @dataclass
 class TraceContext:
@@ -36,17 +46,20 @@ class TraceContext:
         call_id: The unique identifier for this call/span.
         parent_id: The call_id of the parent call, if any.
     """
+
     trace_id: str
     call_id: str
     parent_id: Optional[str]
 
+
 #: The current trace context for the thread or async task.
-current_trace_context: contextvars.ContextVar[Optional[TraceContext]] = contextvars.ContextVar(
-    "current_trace_context", default=None
+current_trace_context: contextvars.ContextVar[Optional[TraceContext]] = (
+    contextvars.ContextVar("current_trace_context", default=None)
 )
 
 
 # --- Call Data Structure ---
+
 
 @dataclass
 class Call:
@@ -64,6 +77,7 @@ class Call:
         end_time: The time the call ended.
         children: List of child Call objects.
     """
+
     name: str
     inputs: Dict[str, Any]
     trace_id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -83,7 +97,12 @@ class Call:
         self.start_time = time.time()
         return self
 
-    def __exit__(self, exc_type: Optional[type], exc_val: Optional[BaseException], exc_tb: Optional[Any]) -> bool:
+    def __exit__(
+        self,
+        exc_type: Optional[type],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[Any],
+    ) -> bool:
         """End timing the call and record any exception."""
         self.end_time = time.time()
         if exc_val is not None:
@@ -107,13 +126,16 @@ class Call:
         with self._lock:
             self.children.append(child)
 
+
 # --- Tracer Interface ---
+
 
 class Tracer(ABC):
     """Abstract base class for all tracers.
 
     Subclasses must implement the start_call context manager.
     """
+
     @abstractmethod
     @contextmanager
     def start_call(
@@ -135,8 +157,10 @@ class Tracer(ABC):
             A Call object (or None for NoOpTracer).
         """
         pass
-    
+
+
 # --- TracingManager ---
+
 
 class TracingManager(Tracer):
     """A tracer that fans out to multiple tracers and manages context propagation.
@@ -144,6 +168,7 @@ class TracingManager(Tracer):
     Args:
         tracers: A list of Tracer instances to fan out to.
     """
+
     def __init__(self, tracers: List[Tracer]) -> None:
         self.tracers = tracers
 
@@ -166,11 +191,18 @@ class TracingManager(Tracer):
             t.start_call(name, inputs, trace_id, parent_id) for t in self.tracers
         ]
         calls: List[Optional[Call]] = []
+        token: Optional[contextvars.Token] = None
         try:
             for ctx in contexts:
                 calls.append(ctx.__enter__())
-            call_id: str = calls[0].call_id if calls and hasattr(calls[0], 'call_id') and calls[0] is not None else str(uuid.uuid4())
-            token: contextvars.Token = current_trace_context.set(TraceContext(trace_id, call_id, parent_id))
+            call_id: str = (
+                calls[0].call_id
+                if calls and hasattr(calls[0], "call_id") and calls[0] is not None
+                else str(uuid.uuid4())
+            )
+            token = current_trace_context.set(
+                TraceContext(trace_id, call_id, parent_id)
+            )
             yield calls[0] if calls else None
         except Exception as e:
             for ctx in contexts:
@@ -180,15 +212,19 @@ class TracingManager(Tracer):
             for ctx in contexts:
                 ctx.__exit__(None, None, None)
         finally:
-            current_trace_context.reset(token)
+            if token is not None:
+                current_trace_context.reset(token)
 
     def add_tracer(self, tracer: Tracer) -> None:
         self.tracers.append(tracer)
 
+
 # --- NoOpTracer ---
+
 
 class NoOpTracer(Tracer):
     """A tracer that does nothing, but propagates context for downstream code."""
+
     @contextmanager
     def start_call(
         self,
@@ -203,16 +239,21 @@ class NoOpTracer(Tracer):
         if trace_id is None and parent_ctx is not None:
             trace_id = parent_ctx.trace_id
         call_id: str = str(uuid.uuid4())
-        token: contextvars.Token = current_trace_context.set(TraceContext(trace_id, call_id, parent_id))
+        token: contextvars.Token = current_trace_context.set(
+            TraceContext(trace_id, call_id, parent_id)
+        )
         try:
             yield None
         finally:
             current_trace_context.reset(token)
 
+
 # --- ConsoleTracer ---
+
 
 class ConsoleTracer(Tracer):
     """A tracer that prints trace events to the console, with indentation."""
+
     def __init__(self) -> None:
         self._call_registry: Dict[str, Call] = {}  # call_id -> Call
 
@@ -236,7 +277,9 @@ class ConsoleTracer(Tracer):
         print(
             f"{indent}>> Call: {name} | trace_id={call.trace_id} | call_id={call.call_id} | parent_id={call.parent_id} | Inputs: {self._shorten(inputs)}"
         )
-        token: contextvars.Token = current_trace_context.set(TraceContext(trace_id, call.call_id, parent_id))
+        token: contextvars.Token = current_trace_context.set(
+            TraceContext(trace_id, call.call_id, parent_id)
+        )
         try:
             yield call
         except Exception as e:
@@ -271,7 +314,10 @@ class ConsoleTracer(Tracer):
             return s[:maxlen] + "..."
         return s
 
-def ensure_tracing_manager(tracer: Optional[Union[Tracer, List[Tracer]]]) -> TracingManager:
+
+def ensure_tracing_manager(
+    tracer: Optional[Union[Tracer, List[Tracer]]],
+) -> TracingManager:
     if tracer is None:
         return TracingManager([NoOpTracer()])
     if isinstance(tracer, TracingManager):
@@ -279,6 +325,7 @@ def ensure_tracing_manager(tracer: Optional[Union[Tracer, List[Tracer]]]) -> Tra
     if isinstance(tracer, list):
         return TracingManager(tracer)
     return TracingManager([tracer])
+
 
 @dataclass
 class ExecutionContext:
@@ -290,12 +337,13 @@ class ExecutionContext:
         call_id: The unique identifier for this call/span.
         parent_id: The call_id of the parent call, if any.
     """
+
     tracer: Tracer = field(default_factory=NoOpTracer)
     trace_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     call_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     parent_id: Optional[str] = None
 
-    def child(self, call_id: Optional[str] = None) -> 'ExecutionContext':
+    def child(self, call_id: Optional[str] = None) -> "ExecutionContext":
         """Create a new context for a child call/span."""
         return ExecutionContext(
             tracer=self.tracer,
@@ -303,7 +351,7 @@ class ExecutionContext:
             call_id=call_id or str(uuid.uuid4()),
             parent_id=self.call_id,
         )
-    
+
     @contextmanager
     def trace_call(self, name: str, inputs: dict):
         with self.tracer.start_call(
@@ -313,4 +361,3 @@ class ExecutionContext:
             parent_id=self.parent_id,
         ) as call:
             yield call
-
