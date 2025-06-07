@@ -37,20 +37,20 @@ def is_signal_safe():
 def keyboard_interrupt_safe(func: Callable[[Any], Any]) -> Callable[[Any], Any]:
     @wraps(func)
     def wrapped(self: Any, *args, **kwargs) -> Any:
-        original_handler = signal.getsignal(signal.SIGINT)
-        signal.signal(signal.SIGINT, lambda signum, frame: self.executor.graceful_shutdown())
+        if is_signal_safe():
+            original_handler = signal.getsignal(signal.SIGINT)
+            signal.signal(signal.SIGINT, lambda signum, frame: self.executor.graceful_shutdown())
 
-        try:
+            try:
+                return func(self, *args, **kwargs)
+            except KeyboardInterrupt:
+                self.executor.graceful_shutdown()
+            finally:
+                signal.signal(signal.SIGINT, original_handler)
+        else:
             return func(self, *args, **kwargs)
-        except KeyboardInterrupt:
-            self.executor.graceful_shutdown()
-        finally:
-            signal.signal(signal.SIGINT, original_handler)
 
-    if is_signal_safe():
-        return wrapped
-    else:
-        return func
+    return wrapped
 
 class DisableLogger:
     def __init__(self, logger_name: str, all: bool=False) -> None:
