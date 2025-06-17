@@ -625,3 +625,292 @@ def test_nested_async_context_propagation():
                 assert inner_ctx.call_id is not None
 
     outer_operation()
+
+
+# === Transform Unit Tracing Tests ===
+
+
+def test_map_unit_tracing_with_default_context():
+    """Test MapUnit execute method with default ExecutionContext."""
+    from verdict.transform import MapUnit
+    from verdict.schema import Schema
+
+    # Create a mock tracer to capture calls
+    mock_tracer = MagicMock(spec=Tracer)
+    mock_call = Mock()
+    mock_tracer.start_call.return_value.__enter__.return_value = mock_call
+    mock_tracer.start_call.return_value.__exit__.return_value = None
+
+    # Create MapUnit
+    map_unit = MapUnit(lambda x: x * 2)
+    input_data = MapUnit.InputSchema(values=[1, 2, 3])
+
+    # Execute with custom execution context
+    execution_context = ExecutionContext(tracer=mock_tracer)
+    result = map_unit.execute(input_data, execution_context)
+
+    # Verify tracing was called
+    mock_tracer.start_call.assert_called_once()
+    call_args = mock_tracer.start_call.call_args
+    assert call_args[1]["name"] == "MapUnit"  # Should use class name
+    assert call_args[1]["inputs"]["input"] == input_data
+    assert call_args[1]["inputs"]["unit"] == map_unit
+
+    # Verify call.set_outputs was called
+    mock_call.set_outputs.assert_called_once()
+    assert isinstance(result, MapUnit.ResponseSchema)
+
+
+def test_map_unit_tracing_with_none_context():
+    """Test MapUnit execute method creates ExecutionContext when None provided."""
+    from verdict.transform import MapUnit
+
+    # Create MapUnit
+    map_unit = MapUnit(lambda x: x * 2)
+    input_data = MapUnit.InputSchema(values=[1, 2, 3])
+
+    # Execute with None execution context (should create default)
+    result = map_unit.execute(input_data, execution_context=None)
+
+    # Should complete without errors
+    assert isinstance(result, MapUnit.ResponseSchema)
+    assert result.values == [1, 2, 3, 1, 2, 3]  # Lambda doubles the list
+
+
+def test_map_unit_tracing_with_console_tracer(capsys):
+    """Test MapUnit execute method with ConsoleTracer."""
+    from verdict.transform import MapUnit
+
+    # Create MapUnit - class name takes priority in call name resolution
+    map_unit = MapUnit(lambda x: [i + 1 for i in x])
+    input_data = MapUnit.InputSchema(values=[1, 2, 3])
+
+    # Execute with ConsoleTracer
+    execution_context = ExecutionContext(tracer=ConsoleTracer())
+    result = map_unit.execute(input_data, execution_context)
+
+    # Check console output - should use class name "MapUnit"
+    captured = capsys.readouterr()
+    assert ">> Call: MapUnit" in captured.out
+    assert "<< Call: MapUnit" in captured.out
+    assert "Duration:" in captured.out
+
+    # Verify result
+    assert isinstance(result, MapUnit.ResponseSchema)
+    assert result.values == [2, 3, 4]
+
+
+def test_field_map_unit_tracing():
+    """Test FieldMapUnit execute method with tracing."""
+    from verdict.transform import FieldMapUnit
+    from verdict.schema import Schema
+    import statistics
+
+    # Create test data
+    test_values = [
+        Schema.inline(score=int)(score=5),
+        Schema.inline(score=int)(score=3),
+        Schema.inline(score=int)(score=4),
+    ]
+    input_data = FieldMapUnit.InputSchema(values=test_values)
+
+    # Create FieldMapUnit - class name takes priority in call name resolution
+    field_map_unit = FieldMapUnit(statistics.mean, ["score"])
+
+    # Create mock tracer
+    mock_tracer = MagicMock(spec=Tracer)
+    mock_call = Mock()
+    mock_tracer.start_call.return_value.__enter__.return_value = mock_call
+    mock_tracer.start_call.return_value.__exit__.return_value = None
+
+    # Execute with tracing
+    execution_context = ExecutionContext(tracer=mock_tracer)
+    result = field_map_unit.execute(input_data, execution_context)
+
+    # Verify tracing was called with correct parameters
+    mock_tracer.start_call.assert_called_once()
+    call_args = mock_tracer.start_call.call_args
+    assert call_args[1]["name"] == "FieldMapUnit"  # Uses class name
+    assert call_args[1]["inputs"]["input"] == input_data
+    assert call_args[1]["inputs"]["unit"] == field_map_unit
+
+    # Verify outputs were set
+    mock_call.set_outputs.assert_called_once()
+
+    # Verify result
+    assert hasattr(result, "score")
+    assert result.score == 4.0  # Mean of [5, 3, 4]
+
+
+def test_mean_pool_unit_tracing():
+    """Test MeanPoolUnit tracing functionality."""
+    from verdict.transform import MeanPoolUnit
+    from verdict.schema import Schema
+
+    # Create test data with scores
+    test_values = [
+        Schema.inline(score=int)(score=5),
+        Schema.inline(score=int)(score=3),
+        Schema.inline(score=int)(score=4),
+    ]
+    input_data = MeanPoolUnit.InputSchema(values=test_values)
+
+    # Create MeanPoolUnit
+    mean_pool = MeanPoolUnit(["score"])
+
+    # Create mock tracer
+    mock_tracer = MagicMock(spec=Tracer)
+    mock_call = Mock()
+    mock_tracer.start_call.return_value.__enter__.return_value = mock_call
+    mock_tracer.start_call.return_value.__exit__.return_value = None
+
+    # Execute with tracing
+    execution_context = ExecutionContext(tracer=mock_tracer)
+    result = mean_pool.execute(input_data, execution_context)
+
+    # Verify tracing was called with MeanPoolUnit class name
+    mock_tracer.start_call.assert_called_once()
+    call_args = mock_tracer.start_call.call_args
+    assert call_args[1]["name"] == "MeanPoolUnit"  # Should use class name
+
+    # Verify outputs and result
+    mock_call.set_outputs.assert_called_once()
+    assert hasattr(result, "score")
+    assert result.score == 4.0
+
+
+def test_map_unit_tracing_call_name_resolution():
+    """Test MapUnit call name resolution priority."""
+    from verdict.transform import MapUnit
+
+    # Test with class name only (default behavior)
+    map_unit1 = MapUnit(lambda x: x)
+    input_data = MapUnit.InputSchema(values=[1])
+
+    mock_tracer = MagicMock(spec=Tracer)
+    mock_tracer.start_call.return_value.__enter__.return_value = Mock()
+    mock_tracer.start_call.return_value.__exit__.return_value = None
+
+    execution_context = ExecutionContext(tracer=mock_tracer)
+    map_unit1.execute(input_data, execution_context)
+
+    # Should use class name first
+    call_args = mock_tracer.start_call.call_args
+    assert call_args[1]["name"] == "MapUnit"
+
+    # Test with _char set (but class name still takes priority)
+    mock_tracer.reset_mock()
+    map_unit2 = MapUnit(lambda x: x)
+    map_unit2._char = "CustomChar"
+
+    map_unit2.execute(input_data, execution_context)
+    call_args = mock_tracer.start_call.call_args
+    assert call_args[1]["name"] == "MapUnit"  # Class name takes priority
+
+    # Test that char property is read-only (computed from _char and other factors)
+    map_unit3 = MapUnit(lambda x: x)
+    map_unit3._char = "TestChar"
+
+    # char property should reflect _char (plus potential model info)
+    assert "TestChar" in map_unit3.char
+
+    # But tracing still uses class name first
+    mock_tracer.reset_mock()
+    map_unit3.execute(input_data, execution_context)
+    call_args = mock_tracer.start_call.call_args
+    assert call_args[1]["name"] == "MapUnit"  # Class name still takes priority
+
+
+def test_map_unit_tracing_with_exception():
+    """Test MapUnit tracing behavior when execution raises exception."""
+    from verdict.transform import MapUnit
+    from verdict.util.exceptions import VerdictExecutionTimeError
+
+    # Create MapUnit that will raise an exception
+    def failing_func(x):
+        raise ValueError("Test error")
+
+    map_unit = MapUnit(failing_func)
+    input_data = MapUnit.InputSchema(values=[1, 2, 3])
+
+    # Create mock tracer
+    mock_tracer = MagicMock(spec=Tracer)
+    mock_call = Mock()
+    mock_tracer.start_call.return_value.__enter__.return_value = mock_call
+    mock_tracer.start_call.return_value.__exit__.return_value = None
+
+    execution_context = ExecutionContext(tracer=mock_tracer)
+
+    # Execute should raise VerdictExecutionTimeError
+    with pytest.raises(VerdictExecutionTimeError):
+        map_unit.execute(input_data, execution_context)
+
+    # Verify tracing was still called
+    mock_tracer.start_call.assert_called_once()
+    # set_outputs should not be called due to exception
+    mock_call.set_outputs.assert_not_called()
+
+
+def test_field_map_unit_tracing_auto_fields():
+    """Test FieldMapUnit tracing with automatic field detection."""
+    from verdict.transform import FieldMapUnit
+    from verdict.schema import Schema
+    import statistics
+
+    # Create test data with multiple fields
+    test_values = [
+        Schema.inline(score=int, confidence=float)(score=5, confidence=0.9),
+        Schema.inline(score=int, confidence=float)(score=3, confidence=0.7),
+        Schema.inline(score=int, confidence=float)(score=4, confidence=0.8),
+    ]
+    input_data = FieldMapUnit.InputSchema(values=test_values)
+
+    # Create FieldMapUnit with empty fields (should auto-detect)
+    field_map_unit = FieldMapUnit(statistics.mean, fields=[])
+
+    # Create mock tracer
+    mock_tracer = MagicMock(spec=Tracer)
+    mock_call = Mock()
+    mock_tracer.start_call.return_value.__enter__.return_value = mock_call
+    mock_tracer.start_call.return_value.__exit__.return_value = None
+
+    # Execute with tracing
+    execution_context = ExecutionContext(tracer=mock_tracer)
+    result = field_map_unit.execute(input_data, execution_context)
+
+    # Verify tracing occurred
+    mock_tracer.start_call.assert_called_once()
+    mock_call.set_outputs.assert_called_once()
+
+    # Verify auto-detected fields were processed
+    assert hasattr(result, "score")
+    assert hasattr(result, "confidence")
+    assert result.score == 4.0  # Mean of [5, 3, 4]
+    assert abs(result.confidence - 0.8) < 0.01  # Mean of [0.9, 0.7, 0.8]
+
+
+def test_transform_units_context_propagation():
+    """Test that transform units properly participate in context propagation."""
+    from verdict.transform import MeanPoolUnit
+    from verdict.schema import Schema
+
+    # Create test data
+    test_values = [Schema.inline(score=int)(score=5), Schema.inline(score=int)(score=3)]
+    input_data = MeanPoolUnit.InputSchema(values=test_values)
+
+    # Set up parent context
+    parent_context = TraceContext("parent_trace", "parent_call", None)
+    token = current_trace_context.set(parent_context)
+
+    try:
+        mean_pool = MeanPoolUnit(["score"])
+
+        # Execute should inherit parent context
+        result = mean_pool.execute(input_data, execution_context=None)
+
+        # Verify result
+        assert hasattr(result, "score")
+        assert result.score == 4.0
+
+    finally:
+        current_trace_context.reset(token)
