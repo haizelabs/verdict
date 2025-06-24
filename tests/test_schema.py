@@ -18,7 +18,10 @@ def test_schema_conform():
     input_instance = SchemaA(a="test", x=42)
 
     transformed_instance = input_instance.conform(SchemaB)
-    assert set(transformed_instance.model_fields.keys()) == set(['a', 'x', 'y', 'name_factory', 'name_default', 'b'])
+    assert set(transformed_instance.model_fields.keys()) == set(
+        ["a", "x", "y", "name_factory", "name_default", "b"]
+    )
+
 
 def test_schema_conform_fail():
     class SchemaA(Schema):
@@ -29,7 +32,7 @@ def test_schema_conform_fail():
         x: int
         y: int
         z: int
-    
+
     input_instance = SchemaA(a=42, b=42)
     with pytest.raises(VerdictDeclarationTimeError):
         input_instance.conform(SchemaB)

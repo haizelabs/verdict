@@ -1,6 +1,6 @@
 import statistics
 from operator import attrgetter
-from typing import Any, Callable, List, Union, Optional
+from typing import Any, Callable, List, Optional, Union
 
 from verdict.core.primitive import Unit
 from verdict.schema import Schema
@@ -102,9 +102,9 @@ class FieldMapUnit(MapUnit):
             if len(self.fields) == 0 and len(values) > 0:
                 self.fields = list(values[0].model_fields.keys())
 
-            assert all(
-                field in values[0].model_fields for field in self.fields
-            ), f"Fields {self.fields} not a subset of input {input.values}"
+            assert all(field in values[0].model_fields for field in self.fields), (
+                f"Fields {self.fields} not a subset of input {input.values}"
+            )
 
             result = Schema.of(
                 **{  # type: ignore

@@ -18,21 +18,19 @@ Usage examples are provided at the end of the file.
 
 import contextvars
 import threading
+import time
 import uuid
 from abc import ABC, abstractmethod
-from contextlib import contextmanager, AbstractContextManager
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
 from typing import (
     Any,
     Dict,
-    Optional,
-    List,
     Iterator,
+    List,
+    Optional,
     Union,
 )
-
-import time
-
 
 # --- Context Management ---
 

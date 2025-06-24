@@ -15,18 +15,25 @@ def disable() -> None:
     from verdict.util.log import logger
 
     state.rate_limiter_disabled = True
-    logger.info("Rate limiting is disabled. All requests will follow an UnlimitedRateLimiter.")
+    logger.info(
+        "Rate limiting is disabled. All requests will follow an UnlimitedRateLimiter."
+    )
+
 
 def enable() -> None:
     from verdict.config import state
     from verdict.util.log import logger
 
     state.rate_limiter_disabled = False
-    logger.info("Rate limiting is enabled. All requests will fallback to their configured RateLimitPolicy.")
+    logger.info(
+        "Rate limiting is enabled. All requests will fallback to their configured RateLimitPolicy."
+    )
+
 
 class RateLimiterMetric(Enum):
-    REQUESTS = 'requests'
-    TOKENS = 'tokens'
+    REQUESTS = "requests"
+    TOKENS = "tokens"
+
 
 class RateLimiter(ABC):
     @abstractmethod
@@ -44,6 +51,7 @@ class RateLimiter(ABC):
     def __str__(self) -> str:
         return f"{self.__class__.__name__}()"
 
+
 class UnlimitedRateLimiter(RateLimiter):
     def acquire(self, value: Optional[int] = None) -> threading.Event:
         event = threading.Event()
@@ -55,6 +63,7 @@ class UnlimitedRateLimiter(RateLimiter):
 
     def copy(self) -> "UnlimitedRateLimiter":
         return UnlimitedRateLimiter()
+
 
 class ConcurrentRateLimiter(RateLimiter):
     # config
@@ -100,8 +109,11 @@ class ConcurrentRateLimiter(RateLimiter):
     def __str__(self) -> str:
         return f"{self.__class__.__name__}(max={self.max_concurrent})"
 
+
 class TimeWindowRateLimiter(RateLimiter):
-    def __init__(self, max_value: int, window_seconds: int, smoothing_factor: float = 0.9) -> None:
+    def __init__(
+        self, max_value: int, window_seconds: int, smoothing_factor: float = 0.9
+    ) -> None:
         self.max_value = max_value
         self.window_seconds = window_seconds
         self.smoothing_factor = smoothing_factor
@@ -112,11 +124,15 @@ class TimeWindowRateLimiter(RateLimiter):
         self._stop_event = threading.Event()
 
         # expiration thread
-        self._expiration_thread = threading.Thread(target=self._expire_and_process, daemon=True)
+        self._expiration_thread = threading.Thread(
+            target=self._expire_and_process, daemon=True
+        )
         self._expiration_thread.start()
-    
+
     def copy(self) -> "TimeWindowRateLimiter":
-        return TimeWindowRateLimiter(self.max_value, self.window_seconds, self.smoothing_factor)
+        return TimeWindowRateLimiter(
+            self.max_value, self.window_seconds, self.smoothing_factor
+        )
 
     def _expire_and_process(self) -> None:
         while not self._stop_event.is_set():
@@ -152,7 +168,9 @@ class TimeWindowRateLimiter(RateLimiter):
     def _process_waiting_tasks(self) -> None:
         while self.waiting:
             wait_event, wait_value = self.waiting[0]
-            if self.current_sum() + wait_value <= (self.max_value * self.smoothing_factor):
+            if self.current_sum() + wait_value <= (
+                self.max_value * self.smoothing_factor
+            ):
                 self.values.append((wait_value, time.perf_counter()))
                 wait_event.set()
                 self.waiting.popleft()
@@ -181,12 +199,12 @@ class TimeWindowRateLimiter(RateLimiter):
 
 RateLimitConfig = Dict[RateLimiter, Union[str, RateLimiterMetric]]
 
-class MultiEvent(Protocol):
-    def wait(self) -> None:
-        ...
 
-    def is_set(self) -> bool:
-        ...
+class MultiEvent(Protocol):
+    def wait(self) -> None: ...
+
+    def is_set(self) -> bool: ...
+
 
 class RateLimitPolicy:
     # config
@@ -194,13 +212,17 @@ class RateLimitPolicy:
 
     def __init__(self, rate_limiters: RateLimitConfig) -> None:
         self.rate_limiters = {
-            rate_limiter: RateLimiterMetric(metric) for rate_limiter, metric in rate_limiters.items()
+            rate_limiter: RateLimiterMetric(metric)
+            for rate_limiter, metric in rate_limiters.items()
         }
 
     def copy(self) -> "RateLimitPolicy":
-        return RateLimitPolicy({
-            rate_limiter.copy(): metric for rate_limiter, metric in self.rate_limiters.items()
-        })
+        return RateLimitPolicy(
+            {
+                rate_limiter.copy(): metric
+                for rate_limiter, metric in self.rate_limiters.items()
+            }
+        )
 
     def acquire(self, values: Dict[str, int] = {}) -> MultiEvent:
         events: List[threading.Event] = []
@@ -209,7 +231,7 @@ class RateLimitPolicy:
 
         return SimpleNamespace(
             wait=lambda: [event.wait() for event in events],
-            is_set=lambda: all(event.is_set() for event in events)
+            is_set=lambda: all(event.is_set() for event in events),
         )
 
     def release(self, values: Dict[str, int] = {}) -> None:
@@ -224,21 +246,24 @@ class RateLimitPolicy:
 
     @staticmethod
     def of(rpm: int, tpm: int) -> "RateLimitPolicy":
-        return RateLimitPolicy({
-            TimeWindowRateLimiter(max_value=rpm, window_seconds=60): 'requests',
-            TimeWindowRateLimiter(max_value=tpm, window_seconds=60): 'tokens'
-        })
+        return RateLimitPolicy(
+            {
+                TimeWindowRateLimiter(max_value=rpm, window_seconds=60): "requests",
+                TimeWindowRateLimiter(max_value=tpm, window_seconds=60): "tokens",
+            }
+        )
 
     @staticmethod
-    def using(requests: Optional[Union[RateLimiter, List[RateLimiter]]]=[], tokens: Optional[Union[RateLimiter, List[RateLimiter]]]=[]) -> "RateLimitPolicy":
+    def using(
+        requests: Optional[Union[RateLimiter, List[RateLimiter]]] = [],
+        tokens: Optional[Union[RateLimiter, List[RateLimiter]]] = [],
+    ) -> "RateLimitPolicy":
         requests = requests if isinstance(requests, list) else [requests]
         tokens = tokens if isinstance(tokens, list) else [tokens]
 
-        return RateLimitPolicy({
-            **{
-                request: RateLimiterMetric.REQUESTS for request in requests
-            },
-            **{
-                token: RateLimiterMetric.TOKENS for token in tokens
+        return RateLimitPolicy(
+            {
+                **{request: RateLimiterMetric.REQUESTS for request in requests},
+                **{token: RateLimiterMetric.TOKENS for token in tokens},
             }
-        })
+        )

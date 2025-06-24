@@ -1,10 +1,9 @@
-
-
 # high-level
 class VerdictSystemError(Exception):
     """
     Non user-defined errors that are related to the core Verdict framework.
     """
+
 
 class VerdictDeclarationTimeError(Exception):
     """
@@ -15,6 +14,7 @@ class VerdictDeclarationTimeError(Exception):
     * using an incompatible Extractor with a particular Scale
     * invalid keys in a Prompt
     """
+
 
 class VerdictExecutionTimeError(Exception):
     """
@@ -33,32 +33,41 @@ class VerdictExecutionTimeError(Exception):
 class InputSchemaMismatchError(VerdictDeclarationTimeError):
     pass
 
+
 class PromptError(VerdictDeclarationTimeError):
     pass
+
 
 class ConfigurationError(VerdictDeclarationTimeError):
     """
     User error with the configuration of a Verdict pipeline.
     """
 
+
 class PostProcessError(VerdictDeclarationTimeError):
     """
     Indicates an error in the process() method of a Unit.
     """
+
     pass
+
 
 class PropagateError(VerdictDeclarationTimeError):
     """
     Indicates an error in the passed propagator function.
     """
+
     pass
+
 
 # Execution-time errors
 class StructuredOutputError(VerdictExecutionTimeError):
     pass
 
+
 class ProviderError(VerdictExecutionTimeError):
     pass
+
 
 class PostValidationError(VerdictExecutionTimeError):
     pass

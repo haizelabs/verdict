@@ -13,24 +13,23 @@ Tests cover:
 """
 
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from unittest.mock import Mock, MagicMock
+from unittest.mock import MagicMock, Mock
 
 import pytest
-import time
 
 from verdict.util.tracing import (
-    TraceContext,
     Call,
-    Tracer,
-    TracingManager,
-    NoOpTracer,
     ConsoleTracer,
     ExecutionContext,
-    ensure_tracing_manager,
+    NoOpTracer,
+    TraceContext,
+    Tracer,
+    TracingManager,
     current_trace_context,
+    ensure_tracing_manager,
 )
-
 
 # === TraceContext Tests ===
 
@@ -633,7 +632,6 @@ def test_nested_async_context_propagation():
 def test_map_unit_tracing_with_default_context():
     """Test MapUnit execute method with default ExecutionContext."""
     from verdict.transform import MapUnit
-    from verdict.schema import Schema
 
     # Create a mock tracer to capture calls
     mock_tracer = MagicMock(spec=Tracer)
@@ -702,9 +700,10 @@ def test_map_unit_tracing_with_console_tracer(capsys):
 
 def test_field_map_unit_tracing():
     """Test FieldMapUnit execute method with tracing."""
-    from verdict.transform import FieldMapUnit
-    from verdict.schema import Schema
     import statistics
+
+    from verdict.schema import Schema
+    from verdict.transform import FieldMapUnit
 
     # Create test data
     test_values = [
@@ -744,8 +743,8 @@ def test_field_map_unit_tracing():
 
 def test_mean_pool_unit_tracing():
     """Test MeanPoolUnit tracing functionality."""
-    from verdict.transform import MeanPoolUnit
     from verdict.schema import Schema
+    from verdict.transform import MeanPoolUnit
 
     # Create test data with scores
     test_values = [
@@ -853,9 +852,10 @@ def test_map_unit_tracing_with_exception():
 
 def test_field_map_unit_tracing_auto_fields():
     """Test FieldMapUnit tracing with automatic field detection."""
-    from verdict.transform import FieldMapUnit
-    from verdict.schema import Schema
     import statistics
+
+    from verdict.schema import Schema
+    from verdict.transform import FieldMapUnit
 
     # Create test data with multiple fields
     test_values = [
@@ -891,8 +891,8 @@ def test_field_map_unit_tracing_auto_fields():
 
 def test_transform_units_context_propagation():
     """Test that transform units properly participate in context propagation."""
-    from verdict.transform import MeanPoolUnit
     from verdict.schema import Schema
+    from verdict.transform import MeanPoolUnit
 
     # Create test data
     test_values = [Schema.inline(score=int)(score=5), Schema.inline(score=int)(score=3)]

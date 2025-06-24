@@ -65,7 +65,7 @@ dev = [
 graphviz = "Graphviz system package (e.g., 'apt-get install graphviz' on Debian, 'brew install graphviz' on macOS, 'choco install graphviz' on Windows)"
 
 [tool.ruff]
-include = ["verdict/**"]
+include = ["verdict/**", "tests/**"]
 [tool.ruff.lint]
 extend-select = ["I"] # isort
 

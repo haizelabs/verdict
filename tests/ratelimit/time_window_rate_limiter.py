@@ -3,9 +3,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 from verdict.util.ratelimit import TimeWindowRateLimiter
 
-rate_limiter = TimeWindowRateLimiter(
-    max_value=3, window_seconds=1
-)
+rate_limiter = TimeWindowRateLimiter(max_value=3, window_seconds=1)
+
 
 def execute(i: int):
     start = time.perf_counter()
@@ -18,6 +17,7 @@ def execute(i: int):
     print(f"done {i} ({time.perf_counter() - start:.2f}s)")
 
     rate_limiter.release(value=0)
+
 
 with ThreadPoolExecutor(max_workers=10) as executor:
     for i in range(10):
