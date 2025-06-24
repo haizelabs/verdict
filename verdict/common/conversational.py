@@ -22,10 +22,11 @@ class Message:
     def __repr__(self) -> str:
         return str(self)
 
+
 class Conversation:
     history: List[Message]
 
-    def __init__(self, history: Optional[List[Message]]=None) -> None:
+    def __init__(self, history: Optional[List[Message]] = None) -> None:
         self.history = history or [Message("<START>", "")]
 
     def get_roles(self) -> List[str]:
@@ -40,7 +41,9 @@ class Conversation:
         return roles
 
     def with_roles(self, roles: List[str]) -> "Conversation":
-        assert len(roles) == len(self.get_roles()), "Number of roles must match existing role structure"
+        assert len(roles) == len(self.get_roles()), (
+            "Number of roles must match existing role structure"
+        )
         for message, role in zip(self.history[1:], cycle(roles)):
             message.role_name = role
 
@@ -61,6 +64,7 @@ class Conversation:
     def copy(self) -> "Conversation":
         return copy.deepcopy(self)
 
+
 class ConversationalUnit(Unit):
     @property
     def _char(self) -> str:
@@ -76,17 +80,19 @@ class ConversationalUnit(Unit):
         conversation: Conversation
         response: str
 
-    def __init__(self, role_name: str, number: bool=True, **kwargs) -> None:
+    def __init__(self, role_name: str, number: bool = True, **kwargs) -> None:
         super().__init__(**kwargs)
         self.role_name = role_name
         self.number = number
 
-    def idx(self, value: Optional[int]=None) -> int:
-        if value is not None and self.number and '#' not in self.role_name:
+    def idx(self, value: Optional[int] = None) -> int:
+        if value is not None and self.number and "#" not in self.role_name:
             self.role_name = f"{self.role_name} #{value}"
         return super().idx(value)
 
     def process(self, input: InputSchema, response: ResponseSchema) -> OutputSchema:
         conversation = copy.deepcopy(input.conversation)
-        conversation.history.append(Message(role_name=self.role_name, message=response.response))
+        conversation.history.append(
+            Message(role_name=self.role_name, message=response.response)
+        )
         return self.OutputSchema(conversation=conversation, response=response.response)

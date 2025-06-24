@@ -4,8 +4,7 @@ import random
 import re
 import string
 from abc import ABC, abstractmethod
-from typing import (Any, Dict, List, NamedTuple, Optional, Set, Tuple, Type,
-                    Union)
+from typing import Any, Dict, List, NamedTuple, Optional, Set, Tuple, Type, Union
 
 from loguru._logger import Logger
 from typing_extensions import Self
@@ -13,7 +12,8 @@ from typing_extensions import Self
 from verdict.schema import Schema
 from verdict.util.exceptions import PromptError
 
-SECTION_REGEX = re.compile(r'@(\w+)(.*?)(?=@\w+|$)', re.DOTALL)
+SECTION_REGEX = re.compile(r"@(\w+)(.*?)(?=@\w+|$)", re.DOTALL)
+
 
 class PromptRegistry(type):
     _registry: Dict[str, Type["Prompt"]] = {}
@@ -25,11 +25,11 @@ class PromptRegistry(type):
         sections = {f"@{section}": content for section, content in matches}
 
         # Assign leading text to '@user' only if it exists and '@user' is not explicitly defined
-        leading_text = template.split('@', 1)[0]
-        if leading_text and '@user' not in sections:
-            sections['@user'] = leading_text
+        leading_text = template.split("@", 1)[0]
+        if leading_text and "@user" not in sections:
+            sections["@user"] = leading_text
 
-        return sections.get('@system'), sections.get('@user'), '@no_format' in sections
+        return sections.get("@system"), sections.get("@user"), "@no_format" in sections
 
     @staticmethod
     def strip_prompt_template(prompt: str) -> str:
@@ -50,22 +50,30 @@ class PromptRegistry(type):
         klass = super().__new__(cls, name, bases, dct)
 
         # only add named classes to the registry
-        if name and not name.startswith('_') and name != 'Prompt':
+        if name and not name.startswith("_") and name != "Prompt":
             cls._registry[name] = klass
 
         if not klass.__doc__:
             raise PromptError(f"Prompt {klass.__name__} must have __doc__.")
 
-        if '' in (klass.extract_keys(klass.__doc__)):
+        if "" in (klass.extract_keys(klass.__doc__)):
             raise PromptError(f"All keys must be named in Prompt {klass.__name__}.")
 
-        klass.system_prompt_template, klass.user_prompt_template, no_format = klass.extract_sections(klass.__doc__)
-        assert klass.user_prompt_template is not None, "User prompt template must be specified."
+        klass.system_prompt_template, klass.user_prompt_template, no_format = (
+            klass.extract_sections(klass.__doc__)
+        )
+        assert klass.user_prompt_template is not None, (
+            "User prompt template must be specified."
+        )
 
         if not no_format:
-            klass.user_prompt_template = klass.strip_prompt_template(klass.user_prompt_template)
+            klass.user_prompt_template = klass.strip_prompt_template(
+                klass.user_prompt_template
+            )
             if klass.system_prompt_template:
-                klass.system_prompt_template = klass.strip_prompt_template(klass.system_prompt_template)
+                klass.system_prompt_template = klass.strip_prompt_template(
+                    klass.system_prompt_template
+                )
 
         return klass
 
@@ -77,20 +85,32 @@ class PromptRegistry(type):
 
     @staticmethod
     def compatible_prompts(unit: Type["Promptable"]) -> List[Type["Prompt"]]:
-        return [prompt for prompt in PromptRegistry._registry.values() if prompt().supports(unit)]
+        return [
+            prompt
+            for prompt in PromptRegistry._registry.values()
+            if prompt().supports(unit)
+        ]
+
 
 class PromptMessage(NamedTuple):
     system: Optional[str]
     user: str
 
-    def to_messages(self, add_nonce: bool=False) -> List[Dict[str, str]]:
-        nonce = ''.join(random.choices(string.ascii_letters, k=10)) + '\n' if add_nonce else ''
+    def to_messages(self, add_nonce: bool = False) -> List[Dict[str, str]]:
+        nonce = (
+            "".join(random.choices(string.ascii_letters, k=10)) + "\n"
+            if add_nonce
+            else ""
+        )
         messages = [{"role": "user", "content": nonce + self.user}]
         if self.system:
             messages.insert(0, {"role": "system", "content": nonce + self.system})
         return messages
 
+
 RESERVED_KEYS = set(["input", "unit", "previous", "source", "prompt"])
+
+
 class Prompt(metaclass=PromptRegistry):
     """
     A prompt template that can be used to generate a prompt for an LLM.
@@ -107,14 +127,10 @@ class Prompt(metaclass=PromptRegistry):
 
     @staticmethod
     def from_template(template: str) -> "Prompt":
-        return type(
-            "",
-            (Prompt,),
-            {"__doc__": template}
-        )()
+        return type("", (Prompt,), {"__doc__": template})()
 
     @staticmethod
-    def extract_keys(template: str, exclude_reserved: bool=True) -> Set[str]:
+    def extract_keys(template: str, exclude_reserved: bool = True) -> Set[str]:
         def extract_variables(template: str) -> Set[str]:
             variables = set()
 
@@ -123,11 +139,12 @@ class Prompt(metaclass=PromptRegistry):
 
             for placeholder in placeholders:
                 try:
-                    tree = ast.parse(placeholder, mode='eval')
+                    tree = ast.parse(placeholder, mode="eval")
 
                     class VariableVisitor(ast.NodeVisitor):
                         def visit_Name(self, node) -> None:
                             variables.add(node.id)
+
                         def visit_Attribute(self, node) -> None:
                             while isinstance(node, ast.Attribute):
                                 node = node.value
@@ -143,12 +160,14 @@ class Prompt(metaclass=PromptRegistry):
         if not exclude_reserved:
             return extract_variables(template)
         return extract_variables(template) - RESERVED_KEYS
-    
+
     def get_all_keys(self) -> Set[str]:
         keys = set()
 
         if self.system_prompt_template:
-            keys |= Prompt.extract_keys(self.system_prompt_template, exclude_reserved=False)
+            keys |= Prompt.extract_keys(
+                self.system_prompt_template, exclude_reserved=False
+            )
 
         keys |= Prompt.extract_keys(self.user_prompt_template, exclude_reserved=False)
 
@@ -159,31 +178,37 @@ class Prompt(metaclass=PromptRegistry):
         return self.get_all_keys() - RESERVED_KEYS - set(self.caller_locals.keys())
 
     def format(
-            self,
-            input_schema: Schema,
-            unit: "Promptable",
-            previous: Any,
-            source: Schema,
-            logger: Optional[Logger]=None
-        ) -> PromptMessage:
-        for illegal_symbol in ['{{', '}}']:
+        self,
+        input_schema: Schema,
+        unit: "Promptable",
+        previous: Any,
+        source: Schema,
+        logger: Optional[Logger] = None,
+    ) -> PromptMessage:
+        for illegal_symbol in ["{{", "}}"]:
             for prompt in [self.system_prompt_template, self.user_prompt_template]:
                 if prompt is not None and illegal_symbol in prompt:
                     if logger:
-                        logger.warning(f"Prompt contains '{illegal_symbol}'. Variable likely not getting evaluated.")
+                        logger.warning(
+                            f"Prompt contains '{illegal_symbol}'. Variable likely not getting evaluated."
+                        )
 
-        format_kwargs = {"input": input_schema} \
-                      | {"unit": unit} \
-                      | {"previous": previous} \
-                      | {"source": source}
+        format_kwargs = (
+            {"input": input_schema}
+            | {"unit": unit}
+            | {"previous": previous}
+            | {"source": source}
+        )
 
         for key, value in self.caller_locals.items():
             if key not in format_kwargs and not key.startswith("__"):
                 format_kwargs[key] = value
 
         return PromptMessage(
-            system=self.auto_format(self.system_prompt_template, format_kwargs) if self.system_prompt_template else None,
-            user=self.auto_format(self.user_prompt_template, format_kwargs)
+            system=self.auto_format(self.system_prompt_template, format_kwargs)
+            if self.system_prompt_template
+            else None,
+            user=self.auto_format(self.user_prompt_template, format_kwargs),
         )
 
     @staticmethod

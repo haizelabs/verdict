@@ -29,9 +29,7 @@ class MapUnit(Unit):
     class ResponseSchema(Schema):
         values: Union[Any, List[Any]]
 
-    def execute(
-        self, input: InputSchema
-    ) -> ResponseSchema:
+    def execute(self, input: InputSchema) -> ResponseSchema:
         try:
             values = input.values
             if len(values) == 1:
@@ -39,14 +37,15 @@ class MapUnit(Unit):
 
             output = self.data.map_func(values)
             if isinstance(output, Schema):
-                self.OutputSchema = self.ResponseSchema = output.__class__ # type: ignore
-                return output # type: ignore
+                self.OutputSchema = self.ResponseSchema = output.__class__  # type: ignore
+                return output  # type: ignore
 
             return MapUnit.ResponseSchema(values=output)
         except Exception as e:
             raise VerdictExecutionTimeError(
                 f"Failed to execute MapUnit: {e} on {input}"
             ) from e
+
 
 class FieldMapUnit(MapUnit):
     fields: List[str]
@@ -55,7 +54,7 @@ class FieldMapUnit(MapUnit):
         self,
         map_func: Callable[[Union[Any, List[Any]]], Union[Any, List[Any]]],
         fields: Union[str, List[str]],
-        **kwargs
+        **kwargs,
     ):
         super().__init__(map_func, **kwargs)
         self.fields = fields if isinstance(fields, list) else [fields]
@@ -66,15 +65,20 @@ class FieldMapUnit(MapUnit):
         if len(self.fields) == 0 and len(values) > 0:
             self.fields = list(values[0].model_fields.keys())
 
-        assert all(field in values[0].model_fields for field in self.fields), f"Fields {self.fields} not a subset of input {input.values}"
-        return Schema.of(**{ # type: ignore
-            field: self.data.map_func(
-                list(map(attrgetter(field), values))
-            ) for field in self.fields
-        })
+        assert all(field in values[0].model_fields for field in self.fields), (
+            f"Fields {self.fields} not a subset of input {input.values}"
+        )
+        return Schema.of(
+            **{  # type: ignore
+                field: self.data.map_func(list(map(attrgetter(field), values)))
+                for field in self.fields
+            }
+        )
 
     @staticmethod
-    def from_fn(fn: Callable[[List[Any]], Any], name: str) -> Callable[[Union[str, List[str]]], "FieldMapUnit"]:
+    def from_fn(
+        fn: Callable[[List[Any]], Any], name: str
+    ) -> Callable[[Union[str, List[str]]], "FieldMapUnit"]:
         return lambda fields=[]: FieldMapUnit(fn, fields, name=name)
 
 
@@ -101,10 +105,8 @@ class MeanVariancePoolUnit(FieldMapUnit):
 
 
 __all__ = [
-    'MapUnit',
-
-    'MeanPoolUnit',
-    'MeanVariancePoolUnit',
-
-    'MaxPoolUnit',
+    "MapUnit",
+    "MeanPoolUnit",
+    "MeanVariancePoolUnit",
+    "MaxPoolUnit",
 ]

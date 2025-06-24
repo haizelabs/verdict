@@ -51,7 +51,6 @@ Evaluation Form (scores ONLY):
 
 @dataclass
 class GEvalJudge:
-
     cot_prompt: str = DEFAULT_G_EVAL_COHERENCE_PROMPT
     cot_model: str = "gpt-4o"
     cot_temperature: float = 0.5

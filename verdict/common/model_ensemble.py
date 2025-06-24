@@ -38,7 +38,6 @@ class ModelEnsembleJudge:
 
 
 if __name__ == "__main__":
-
     prompt = """
     Rate this joke's comedic merit: {source.joke}
     """

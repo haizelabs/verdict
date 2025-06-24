@@ -16,7 +16,7 @@ from verdict.util.exceptions import ConfigurationError
 class SynchronizationState:
     lock: threading.Lock
 
-    peers: Set["Task"] # n_peers
+    peers: Set["Task"]  # n_peers
 
     shared: bool
     branch_lock: threading.Lock
@@ -34,7 +34,7 @@ class SynchronizationState:
 
         self.peers = set()
 
-        self.shared = False # sets to True on clone
+        self.shared = False  # sets to True on clone
         self.branch_lock = threading.Lock()
         self.branch = None
 
@@ -44,7 +44,7 @@ class SynchronizationState:
 
         self.output_tokens = []
 
-    def add(self, peer: "Unit") -> "SynchronizationState": # noqa: F821 # type: ignore[name-defined]
+    def add(self, peer: "Unit") -> "SynchronizationState":  # noqa: F821 # type: ignore[name-defined]
         with self.lock:
             self.peers.add(peer)
             self.shared = True
@@ -66,5 +66,7 @@ class UserState:
 
     def copy(self) -> "UserState":
         new = UserState()
-        object.__setattr__(new, "_dict", {k: copy.copy(v) for k, v in self._dict.items()})
+        object.__setattr__(
+            new, "_dict", {k: copy.copy(v) for k, v in self._dict.items()}
+        )
         return new

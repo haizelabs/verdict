@@ -3,10 +3,10 @@ from verdict.prompt import Prompt
 
 class GEvalEvaluationStepsCoTPrompt(Prompt):
     """
-        {root.task}
+    {root.task}
 
-        Evaluation Criteria:
-        {criteria.name} ({criteria.scale}) - {criteria.description}
+    Evaluation Criteria:
+    {criteria.name} ({criteria.scale}) - {criteria.description}
 
-        Evaluation Steps:
+    Evaluation Steps:
     """
