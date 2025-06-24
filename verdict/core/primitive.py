@@ -52,7 +52,7 @@ from verdict.util.exceptions import (
     VerdictExecutionTimeError,
 )
 from verdict.util.log import logger as base_logger
-from verdict.util.misc import DisableLogger
+from verdict.util.misc import DisableLogger, shorten_string
 from verdict.util.tracing import ExecutionContext
 
 
@@ -354,7 +354,9 @@ class Unit(
                         conformed_input, logger
                     )
                     logger.debug(f"Populated system prompt: {prompt_message.system}")
-                    logger.debug(f"Populated user prompt: {prompt_message.user}")
+                    logger.debug(
+                        f"Populated user prompt: {shorten_string(prompt_message.user)}"
+                    )
 
                     in_tokens = len(client.encode(prompt_message.user))
                     out_tokens_estimate = np.mean(
@@ -619,7 +621,7 @@ class Layer(Graph[Node], Node, ModelConfigurable):  # type: ignore
         self.order = order
         return self, context
 
-    def __rshift__(self, other: Union[Unit, "Layer", "Block"]):  # type: ignore
+    def __rshift__(self, other: Union[Unit, "Layer", "Block"]) -> "Block":  # type: ignore
         return (Block() >> self) >> other
 
     def link(self, other: Union[Unit, "Layer", "Block"]) -> None:  # type: ignore

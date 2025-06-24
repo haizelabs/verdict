@@ -9,6 +9,7 @@ from pydantic.fields import FieldInfo
 
 from verdict.scale import Scale
 from verdict.util.exceptions import ConfigurationError
+from verdict.util.misc import shorten_string
 
 
 class Schema(BaseModel, ABC):
@@ -211,7 +212,8 @@ class ResponseSchema(Schema):
         )(**kwargs)
 
     def escape(self) -> str:
-        return str(self).replace("{", "{{").replace("}", "}}")
+        representation = str(self).replace("{", "{{").replace("}", "}}")
+        return shorten_string(representation)
 
     def conform(
         self, expected: Type["Schema"], logger: Optional[Logger] = None

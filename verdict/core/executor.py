@@ -271,7 +271,7 @@ class GraphExecutor:
 
     def submit(
         self,
-        tasks: List["Unit"],
+        tasks: List["Unit"],  # noqa: F821 # type: ignore
         input_data: Schema,
         leader: bool = False,
         execution_context: Optional["ExecutionContext"] = None,
@@ -309,7 +309,7 @@ class GraphExecutor:
 
     def _try_execute(
         self,
-        task: "Unit",
+        task: "Unit",  # noqa: F821 # type: ignore
         leader: bool,
         execution_context: Optional["ExecutionContext"] = None,
     ) -> None:  # noqa: F821 # type: ignore[name-defined]
@@ -352,7 +352,7 @@ class GraphExecutor:
     @base_logger.catch()
     def _execute_task(
         self,
-        task: "Unit",
+        task: "Unit",  # noqa: F821 # type: ignore
         input_data: Schema,
         leader: bool,
         execution_context: Optional["ExecutionContext"] = None,

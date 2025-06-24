@@ -3,12 +3,14 @@ import inspect
 import random
 import re
 import string
+import textwrap
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, NamedTuple, Optional, Set, Tuple, Type, Union
 
 from loguru._logger import Logger
 from typing_extensions import Self
 
+from verdict.image import Image
 from verdict.schema import Schema
 from verdict.util.exceptions import PromptError
 
@@ -95,14 +97,42 @@ class PromptRegistry(type):
 class PromptMessage(NamedTuple):
     system: Optional[str]
     user: str
+    input_schema: Optional[Schema] = None
 
-    def to_messages(self, add_nonce: bool = False) -> List[Dict[str, str]]:
+    def _get_image_values(self, input_schema: Optional[Schema] = None) -> List:
+        image_values = []
+        if input_schema is None:
+            return image_values
+
+        for field_value in input_schema.model_dump().values():
+            if "type" in field_value and "image/" in field_value["type"]:
+                image_values.append(field_value)
+
+        return image_values
+
+    def to_messages(
+        self, add_nonce: bool = False
+    ) -> List[Dict[str, str | List[Dict[str, str | Dict[str, str]]]]]:
         nonce = (
             "".join(random.choices(string.ascii_letters, k=10)) + "\n"
             if add_nonce
             else ""
         )
-        messages = [{"role": "user", "content": nonce + self.user}]
+        content = [{"type": "text", "text": nonce + self.user}]
+
+        image_values = self._get_image_values(self.input_schema)
+        if image_values:
+            for image in image_values:
+                content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{image['type']};base64,{image['data']}"
+                        },
+                    }
+                )
+
+        messages = [{"role": "user", "content": content}]
         if self.system:
             messages.insert(0, {"role": "system", "content": nonce + self.system})
         return messages
@@ -205,10 +235,13 @@ class Prompt(metaclass=PromptRegistry):
                 format_kwargs[key] = value
 
         return PromptMessage(
-            system=self.auto_format(self.system_prompt_template, format_kwargs)
-            if self.system_prompt_template
-            else None,
+            system=(
+                self.auto_format(self.system_prompt_template, format_kwargs)
+                if self.system_prompt_template
+                else None
+            ),
             user=self.auto_format(self.user_prompt_template, format_kwargs),
+            input_schema=input_schema,
         )
 
     @staticmethod
@@ -221,9 +254,15 @@ class Prompt(metaclass=PromptRegistry):
                 value = eval(match, {}, context)
                 template = template.replace(f"{{{match}}}", str(value))
             except Exception as e:
-                raise PromptError(f"""Failed to evaluate Prompt placeholder '{match}' in the following context.
+                raise PromptError(
+                    textwrap.dedent(
+                        f"""
+                        Failed to evaluate Prompt placeholder '{match}' in the following context.
 
-Context: {context}""") from e
+                        Context: {context}
+                        """
+                    )
+                ) from e
 
         return template
 

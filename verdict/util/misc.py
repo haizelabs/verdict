@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import signal
 import sys
 import threading
@@ -75,3 +76,28 @@ class DisableLogger:
 def lightweight(cls: Type) -> Type:
     cls.lightweight = True
     return cls
+
+
+def shorten_string(text: str, truncate_length: int = 10) -> str:
+    """
+    Shorten inputs for logging, particularly if it contains base64 data.
+
+    Args:
+        text: The string that may contain base64 data
+        truncate_length: How many characters to keep before truncating
+
+    Returns:
+        The string with base64 data truncated
+    """
+    # Check if the string contains image type patterns
+    if re.search(r"'type': 'image/[^']*'", text):
+
+        def truncate_base64(match):
+            base64_data = match.group(1)
+            return (
+                f"'data': '{base64_data[: min(truncate_length, len(base64_data))]}...'"
+            )
+
+        return re.sub(r"'data': '([^']{10,})'", truncate_base64, text)
+
+    return text
