@@ -1,3 +1,5 @@
+import pprint
+import textwrap
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -156,6 +158,42 @@ class Client:
     model: Model
     inference_parameters: dict[str, Any]
 
+    def _supports_image_input(self) -> bool:
+        if hasattr(self.model, "provider"):
+            # TODO: add more model providers
+            VISION_MODELS = {
+                "openai": [
+                    "o4-mini",
+                    "o3",
+                    "o3-pro",
+                    "o1",
+                    "o1-pro",
+                    "gpt-4.1",
+                    "gpt-4o",
+                    "chatgpt-4o-latest",
+                    "gpt-4.1-mini",
+                    "o4-mini",
+                    "gpt-4.1-nano",
+                    "gpt-4o-mini",
+                ],
+            }
+
+            provider_models = VISION_MODELS.get(self.model.provider, [])
+            return self.model.char in provider_models
+        return False
+
+    def _has_image_content(
+        self, messages: List[Dict[str, str | List[Dict[str, str | Dict[str, str]]]]]
+    ) -> bool:
+        for message in messages:
+            content = message.get("content", "")
+            if isinstance(content, list):
+                for item in content:
+                    if isinstance(item, dict) and item.get("type") == "image_url":
+                        return True
+
+        return False
+
     @contextmanager
     def defaults(self, **inference_parameters_defaults) -> ContextManager[None]:  # type: ignore
         original_inference_parameters = self.inference_parameters
@@ -177,11 +215,22 @@ class Client:
     ):
         from verdict import config
 
-        logger.debug(f"""Preparing parameters for {repr(self.model)} with
-specified connection_parameters: {self.model.connection_parameters}
-default inference_parameters: {config.DEFAULT_INFERENCE_PARAMS}
-specified inference_parameters: {self.inference_parameters}
-""")
+        if self._has_image_content(messages) and not self._supports_image_input():
+            raise ConfigurationError(
+                f"Model {self.model.name} does not support image inputs. "
+                f"Images were detected in the message content. "
+            )
+
+        logger.debug(
+            textwrap.dedent(
+                f"""
+                Preparing parameters for {repr(self.model)} with
+                specified connection_parameters: {self.model.connection_parameters}
+                default inference_parameters: {config.DEFAULT_INFERENCE_PARAMS}
+                specified inference_parameters: {self.inference_parameters}
+                """
+            )
+        )
 
         # 1. add in messages, connection_parameters, and inference_parameters (defaults first)
         parameters = {
@@ -210,7 +259,7 @@ specified inference_parameters: {self.inference_parameters}
             p: v for p, v in parameters.items() if p not in ["api_key"]
         }
         logger.debug(
-            f"Sending parameters for {repr(self.model)}: {parameters_no_api_key}"
+            f"Sending parameters for {repr(self.model)}:  {pprint.pformat(parameters_no_api_key, width=80, depth=3)}"
         )
         return self.complete(**parameters)
 

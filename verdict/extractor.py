@@ -91,10 +91,15 @@ class StructuredOutputExtractor(Extractor):
             streaming=self.streaming,
         )
 
+        # TODO: add support / ping LiteLLM for image token usage tracking
+        in_tokens = 0
+        for message in messages:
+            for content in message["content"]:
+                if content["type"] == "text":
+                    in_tokens += len(client_wrapper.encode(content["text"]))
+
         usage = Usage(
-            in_tokens=sum(
-                len(client_wrapper.encode(message["content"])) for message in messages
-            ),
+            in_tokens=in_tokens,
             out_tokens=len(client_wrapper.encode(str(response.model_dump())))
             if not self.streaming
             else -1,
