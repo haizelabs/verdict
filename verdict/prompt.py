@@ -10,9 +10,9 @@ from typing import Any, Dict, List, NamedTuple, Optional, Set, Tuple, Type, Unio
 from loguru._logger import Logger
 from typing_extensions import Self
 
-from verdict.util.image import Image
 from verdict.schema import Schema
 from verdict.util.exceptions import PromptError
+from verdict.util.image import Image
 
 SECTION_REGEX = re.compile(r"@(\w+)(.*?)(?=@\w+|$)", re.DOTALL)
 

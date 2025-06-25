@@ -2,7 +2,8 @@ import base64
 import textwrap
 from dataclasses import dataclass, field
 from typing import List, Tuple
-from verdict import Pipeline, Unit, Image
+
+from verdict import Image, Pipeline, Unit
 from verdict.scale import DiscreteScale
 from verdict.schema import Field, Schema
 
@@ -21,7 +22,6 @@ class ImagePairwiseJudgeUnitWithRationale(ImagePairwiseJudgeUnit):
 
 @dataclass
 class ImagePairwiseJudge:
-
     DEFAULT_JUDGE_PROMPT = textwrap.dedent(
         """
         @system
@@ -52,7 +52,6 @@ class ImagePairwiseJudge:
     explanation: bool = False
 
     def __post_init__(self):
-
         if self.explanation:
             unit = ImagePairwiseJudgeUnitWithRationale().prompt(
                 self.DEFAULT_JUDGE_PROMPT_WITH_RATIONALE

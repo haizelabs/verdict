@@ -1,9 +1,10 @@
 import base64
-from typing import Optional, Union
-from pathlib import Path
 import mimetypes
+from pathlib import Path
+from typing import Optional, Union
 
 from pydantic import BaseModel, Field, field_validator
+
 
 class ImageModel(BaseModel):
     type: str = Field(..., description="MIME type, e.g. image/jpeg/etc.")
@@ -25,7 +26,12 @@ class ImageModel(BaseModel):
             raise ValueError("Invalid base64 data")
         return v
 
-def Image(file: Optional[Union[Path, str]]=None, mime: Optional[str]=None, blob: Optional[str]=None) -> ImageModel:
+
+def Image(
+    file: Optional[Union[Path, str]] = None,
+    mime: Optional[str] = None,
+    blob: Optional[str] = None,
+) -> ImageModel:
     """
     file: Path to the image file.
 
