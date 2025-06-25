@@ -5,14 +5,14 @@ import re
 import string
 import textwrap
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, NamedTuple, Optional, Set, Tuple, Type, Union
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
 
 from loguru._logger import Logger
 from typing_extensions import Self
 
 from verdict.schema import Schema
 from verdict.util.exceptions import PromptError
-from verdict.util.image import Image
 
 SECTION_REGEX = re.compile(r"@(\w+)(.*?)(?=@\w+|$)", re.DOTALL)
 
@@ -94,7 +94,8 @@ class PromptRegistry(type):
         ]
 
 
-class PromptMessage(NamedTuple):
+@dataclass
+class PromptMessage:
     system: Optional[str]
     user: str
     input_schema: Optional[Schema] = None
@@ -118,12 +119,12 @@ class PromptMessage(NamedTuple):
             if add_nonce
             else ""
         )
-        content = [{"type": "text", "text": nonce + self.user}]
 
-        image_values = self._get_image_values(self.input_schema)
-        if image_values:
+        image_data = []
+        if image_values := self._get_image_values(self.input_schema):
             for image in image_values:
-                content.append(
+                self.user = self.user.replace(str(image), "")
+                image_data.append(
                     {
                         "type": "image_url",
                         "image_url": {
@@ -131,6 +132,7 @@ class PromptMessage(NamedTuple):
                         },
                     }
                 )
+        content = [{"type": "text", "text": nonce + self.user}] + image_data
 
         messages = [{"role": "user", "content": content}]
         if self.system:
