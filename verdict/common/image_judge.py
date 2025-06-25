@@ -30,8 +30,8 @@ class ImagePairwiseJudge:
         @user
         Given the following two images, decide which one is more aesthetically pleasing.
 
-        {input.image_a}
-        {input.image_b}
+        {source.image_a}
+        {source.image_b}
 
         Your response should be a single letter, either "A" for the first image or "B" for the second image, indicating your choice.
         """
