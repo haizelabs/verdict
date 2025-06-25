@@ -1,30 +1,11 @@
 import base64
+import textwrap
+from dataclasses import dataclass, field
+from typing import List, Tuple
 
-import requests
-
-from verdict import Pipeline
-from verdict.core.primitive import Unit
-from verdict.image import Image
+from verdict import Image, Pipeline, Unit
 from verdict.scale import DiscreteScale
 from verdict.schema import Field, Schema
-
-
-def download_image(url: str) -> str:
-    response = requests.get(url, timeout=10)
-    response.raise_for_status()
-    return base64.b64encode(response.content).decode("utf-8")
-
-
-def get_test_image(url: str) -> str:
-    return download_image(url)
-
-
-class ImageJudgeUnit(Unit):
-    _char: str = "ImageJudge"
-
-    class ResponseSchema(Schema):
-        score: int = Field(..., ge=1, le=5, description="Score from 1-5")
-        explanation: str = Field(..., description="Explanation for the score")
 
 
 class ImagePairwiseJudgeUnit(Unit):
@@ -32,82 +13,78 @@ class ImagePairwiseJudgeUnit(Unit):
 
     class ResponseSchema(Schema):
         choice: DiscreteScale = DiscreteScale(["A", "B"])
-        explanation: str = Field(..., description="Explanation for the score")
 
 
-def test_single_image():
-    judge = ImageJudgeUnit().prompt("""
-    Rate the quality of this image on a scale of 1-5, where:
-    1 = Very poor quality (blurry, low resolution, hard to see details)
-    5 = Excellent quality (sharp, clear, high resolution, easy to see details)
-    
-    Image: {input.image}
-    Question: {input.question}
-    
-    Provide your rating and explanation:
-    """)
-
-    test_data = [
-        Schema.of(
-            image=Image(
-                type="image/png",
-                data=get_test_image("https://httpbin.org/image/png"),
-            ),
-            question="How would you rate the overall quality of this image?",
-        ),
-        Schema.of(
-            image=Image(
-                type="image/jpeg",
-                data=get_test_image("https://httpbin.org/image/jpeg"),
-            ),
-            question="Rate the clarity and sharpness of this image",
-        ),
-    ]
-
-    pipeline = Pipeline() >> judge
-    results_df, leaf_node_cols = pipeline.run_from_list(test_data)
-
-    print("--- Results ---")
-    print("Score:", results_df[leaf_node_cols[0]][0])
-    print("Explanation:", results_df[leaf_node_cols[1]][0])
+class ImagePairwiseJudgeUnitWithRationale(ImagePairwiseJudgeUnit):
+    class ResponseSchema(ImagePairwiseJudgeUnit.ResponseSchema):
+        explanation: str = Field(..., description="Explanation for the choice")
 
 
-def test_pairwise_image():
-    judge = (
-        ImagePairwiseJudgeUnit()
-        .prompt("""
-    Which image is more like a deer? 
-    If you think the first image is more like a deer, choose A. If you think the second image is more like a deer, choose B.
-    
-    {input.image_a}
-    {input.image_b}
-    
-    Provide your choice and explanation:
-    """)
-        .via("gpt-4o")
+@dataclass
+class ImagePairwiseJudge:
+    DEFAULT_JUDGE_PROMPT = textwrap.dedent(
+        """
+        @system
+        You are an art critic with exceptional taste in the matters of animated art. You are given two images and you need to judge which one is better.
+
+        @user
+        Given the following two images, decide which one is more aesthetically pleasing.
+
+        {input.image_a}
+        {input.image_b}
+
+        Your response should be a single letter, either "A" for the first image or "B" for the second image, indicating your choice.
+        """
     )
 
-    test_data = [
-        Schema.of(
-            image_a=Image(
-                type="image/png",
-                data=get_test_image("https://httpbin.org/image/png"),
-            ),
-            image_b=Image(
-                type="image/jpeg",
-                data=get_test_image("https://httpbin.org/image/jpeg"),
-            ),
-        ),
-    ]
+    DEFAULT_JUDGE_PROMPT_WITH_RATIONALE = textwrap.dedent(
+        f"""
+        {DEFAULT_JUDGE_PROMPT}
+        Please provide a rationale for your choice.
+        """
+    )
 
-    pipeline = Pipeline() >> judge
-    results_df, leaf_node_cols = pipeline.run_from_list(test_data)
+    output_categories: DiscreteScale = field(
+        default_factory=lambda: DiscreteScale(["A", "B"])
+    )
+    model: str = "gpt-4.1-mini"
+    retries: int = 3
+    explanation: bool = False
 
-    print("--- Results ---")
-    print("Choice:", results_df[leaf_node_cols[0]][0])
-    print("Explanation:", results_df[leaf_node_cols[1]][0])
+    def __post_init__(self):
+        if self.explanation:
+            unit = ImagePairwiseJudgeUnitWithRationale().prompt(
+                self.DEFAULT_JUDGE_PROMPT_WITH_RATIONALE
+            )
+        else:
+            unit = ImagePairwiseJudgeUnit().prompt(self.DEFAULT_JUDGE_PROMPT)
+
+        self.pipeline = Pipeline() >> unit.via(
+            policy_or_name=self.model, retries=self.retries
+        )
+
+    def run(self, dataset: List[Schema]) -> List[str] | Tuple[List[str], List[str]]:
+        results_df, leaf_node_cols = self.pipeline.run_from_list(dataset)
+        if self.explanation:
+            return list(results_df[leaf_node_cols[0]]), list(
+                results_df[leaf_node_cols[1]]
+            )
+        return list(results_df[leaf_node_cols[0]])
+
+
+def encode_image(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode("utf-8")
 
 
 if __name__ == "__main__":
-    # test_single_image()
-    test_pairwise_image()
+    judge = ImagePairwiseJudge(explanation=True)
+
+    data = [
+        Schema.of(
+            image_a=Image("images/nyc-bird.jpeg"),
+            image_b=Image("images/sf-bird.jpeg"),
+        )
+    ]
+    results = judge.run(data)
+    print(results)
