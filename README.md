@@ -155,3 +155,15 @@ Verdict judges can be used anywhere to replace human feedback and verification. 
 
 ## Learn More
 To learn more about applying Verdict for your judging use cases, please find us at `contact@haizelabs.com`.
+
+## Citing This Work
+If you find this work useful, please consider citing it in your research. Use the following BibTeX entry:
+
+```bibtex
+@article{kalra2025verdict,
+  title={VERDICT: A Library for Scaling Judge-Time Compute},
+  author={Kalra, Nimit and Tang, Leonard},
+  journal={arXiv preprint arXiv:2502.18018},
+  year={2025}
+}
+```
