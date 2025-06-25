@@ -20,7 +20,7 @@ from typing_extensions import Self
 
 from verdict.schema import Schema
 from verdict.util.exceptions import ConfigurationError
-from verdict.util.misc import DisableLogger
+from verdict.util.misc import DisableLogger, shorten_string
 from verdict.util.ratelimit import (
     RateLimitConfig,
     RateLimitPolicy,
@@ -316,7 +316,7 @@ class ClientWrapper:
         import tokenizers  # type: ignore[import-untyped]
         from litellm import encode  # type: ignore[import-untyped]
 
-        tokens = encode(model=self.model.name, text=word)
+        tokens = encode(model=self.model.name, text=shorten_string(word, encoded=False))
         if isinstance(tokens, tokenizers.Encoding):
             return tokens.ids
 

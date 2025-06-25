@@ -95,6 +95,8 @@ class StructuredOutputExtractor(Extractor):
         in_tokens = 0
         for message in messages:
             for content in message["content"]:
+                if isinstance(content, str):
+                    continue
                 if content["type"] == "text":
                     in_tokens += len(client_wrapper.encode(content["text"]))
 

@@ -78,7 +78,7 @@ def lightweight(cls: Type) -> Type:
     return cls
 
 
-def shorten_string(text: str, truncate_length: int = 10) -> str:
+def shorten_string(text: str, truncate_length: int = 10, encoded: bool = True) -> str:
     """
     Shorten inputs for logging, particularly if it contains base64 data.
 
@@ -89,15 +89,16 @@ def shorten_string(text: str, truncate_length: int = 10) -> str:
     Returns:
         The string with base64 data truncated
     """
-    # Check if the string contains image type patterns
-    if re.search(r"'type': 'image/[^']*'", text):
 
-        def truncate_base64(match):
-            base64_data = match.group(1)
-            return (
-                f"'data': '{base64_data[: min(truncate_length, len(base64_data))]}...'"
-            )
+    def truncate_base64(match):
+        base64_data = match.group(1)
+        return f"'data': '{base64_data[: min(truncate_length, len(base64_data))]}...'"
 
-        return re.sub(r"'data': '([^']{10,})'", truncate_base64, text)
+    if encoded:
+        # Check if the string contains image type patterns
+        if re.search(r"'type': 'image/[^']*'", text):
+            return re.sub(r"'data': '([^\s']{10,})'", truncate_base64, text)
 
-    return text
+        return text
+    else:
+        return re.sub(r"([^\s']{100,})", truncate_base64, text)
