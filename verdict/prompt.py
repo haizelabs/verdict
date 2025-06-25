@@ -10,7 +10,7 @@ from typing import Any, Dict, List, NamedTuple, Optional, Set, Tuple, Type, Unio
 from loguru._logger import Logger
 from typing_extensions import Self
 
-from verdict.image import Image
+from verdict.util.image import Image
 from verdict.schema import Schema
 from verdict.util.exceptions import PromptError
 
