@@ -106,8 +106,10 @@ class PromptMessage:
             return image_values
 
         for field_value in input_schema.model_dump().values():
-            if "type" in field_value and "image/" in field_value["type"]:
-                image_values.append(field_value)
+            if isinstance(field_value, dict):
+                image_type = field_value.get("type")
+                if image_type and image_type.startswith("image/"):
+                    image_values.append(field_value)
 
         return image_values
 
