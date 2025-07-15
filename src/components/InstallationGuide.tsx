@@ -78,6 +78,10 @@ from verdict.schema import Schema
 from verdict.extractor import ArgmaxScoreExtractor
 from datasets import load_dataset
 
+### (Optional) Disable client-side rate-limiting ###
+# from verdict.util import ratelimit
+# ratelimit.disable()
+
 ### Load the JudgeBench dataset from HuggingFace ###
 dataset = DatasetWrapper.from_hf(
     load_dataset("ScalerLab/JudgeBench"),
