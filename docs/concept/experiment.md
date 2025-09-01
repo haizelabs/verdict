@@ -7,11 +7,11 @@ In the LLM-as-a-judge literature, there are a number of agreement correlation me
 
 ## Usage
 ```python
-from verdict.experiment import ExperimentConfig
+from verdict.util.experiment import ExperimentConfig
 
 experiment_config = ExperimentConfig(
-    prediction_column="Hierarchical_root.block.unit[Map MaxPoolUnit].score",
-    ground_truth_column="score",
+    prediction_cols=["Hierarchical_root.block.unit[Map MaxPoolUnit].score"],
+    ground_truth_cols=["score"],
     pivot_columns=["language"]
 )
 ```
@@ -27,7 +27,7 @@ result_df, leaf_node_prefixes = pipeline.run_from_dataset(
 ~~~
 ||| After Execution
 ~~~python
-from verdict.experiment import display_stats, compute_stats_table
+from verdict.util.experiment import display_stats, compute_stats_table
 
 # display stats in console
 display_stats(result_df, experiment_config)
