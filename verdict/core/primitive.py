@@ -53,6 +53,7 @@ from verdict.util.exceptions import (
 )
 from verdict.util.log import logger as base_logger
 from verdict.util.misc import DisableLogger, shorten_string
+from verdict.util.cache import build_unit_cache_key, CachePayload
 from verdict.util.tracing import ExecutionContext
 
 
@@ -358,6 +359,39 @@ class Unit(
                         f"Populated user prompt: {shorten_string(prompt_message.user)}"
                     )
 
+                    # Check cache before making any inference call
+                    cache_hit = None
+                    cache_key = None
+                    try:
+                        if getattr(self.executor, "cache", None) is not None:
+                            # Build messages without nonce for a stable key
+                            stable_messages = prompt_message.to_messages(add_nonce=False)
+                            extractor: Extractor = (
+                                self.extractor() if isinstance(self.extractor, type) else self.extractor
+                            )
+                            extractor.inject(unit=self)
+                            cache_key = build_unit_cache_key(
+                                unit_prefix=getattr(self, "prefix", []),
+                                messages=stable_messages,  # type: ignore[arg-type]
+                                model_name=client.model.name,
+                                extractor=extractor.__class__.__name__,
+                                response_schema=self.ResponseSchema.__name__,
+                            )
+                            cache_hit = self.executor.cache.get(cache_key)  # type: ignore
+                    except Exception as e:
+                        logger.debug(f"Cache lookup failed or disabled: {e}")
+
+                    if cache_hit is not None:
+                        try:
+                            # Reconstruct a Schema result
+                            result = Schema.of(**cache_hit.response)
+                            logger.info("Cache hit. Skipping inference.")
+                            if call is not None:
+                                call.set_outputs(result)
+                            return result  # type: ignore
+                        except Exception as e:
+                            logger.debug(f"Failed to reconstruct cached result, continuing without cache: {e}")
+
                     in_tokens = len(client.encode(prompt_message.user))
                     out_tokens_estimate = np.mean(
                         self.shared.output_tokens or [0.0]
@@ -427,6 +461,14 @@ class Unit(
                     )
                     logger.debug(f"Received out_tokens={out_tokens}")
 
+                    # Accounting
+                    try:
+                        if getattr(self, "executor", None) is not None and hasattr(self.executor, "register_usage"):
+                            provider = getattr(client.model, "provider", client.model.name.split("/")[0])
+                            self.executor.register_usage(client.model.name, provider, usage.in_tokens, out_tokens)  # type: ignore
+                    except Exception as e:
+                        logger.debug(f"Usage accounting failed: {e}")
+
                     try:
                         self.validate(conformed_input, response)
                     except Exception as e:
@@ -447,6 +489,27 @@ class Unit(
                         logger.info("Unit.execute() successful")
                         if call is not None:
                             call.set_outputs(result)
+
+                        # Write to cache on success
+                        try:
+                            if cache_key is not None and getattr(self.executor, "cache", None) is not None:
+                                payload = CachePayload(
+                                    response=result.model_dump(),
+                                    usage={
+                                        "in_tokens": usage.in_tokens,
+                                        "out_tokens": out_tokens,
+                                    },
+                                    meta={
+                                        "model": client.model.name,
+                                        "provider": getattr(client.model, "provider", None),
+                                        "extractor": extractor.__class__.__name__,
+                                        "unit": ".".join(getattr(self, "prefix", [])),
+                                    },
+                                )
+                                self.executor.cache.set(cache_key, payload)  # type: ignore
+                        except Exception as e:
+                            logger.debug(f"Cache write failed: {e}")
+
                         return result
                     except Exception as e:
                         raise PropagateError() from e
