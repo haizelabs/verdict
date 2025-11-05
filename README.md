@@ -42,7 +42,9 @@ pipeline = Pipeline() \
 ----
 
 Verdict judges beat out reasoning models like o1 and o3-mini on evaluation tasks for a fraction of the cost and latency.
-<p align="center"><img src="https://verdict.haizelabs.com/Verdict-Tradeoff.png" alt="Performance vs. Cost/Latency Tradeoff Comparison"></p>
+<p align="center"><img width="800" alt="Performance vs. Cost/Latency Tradeoff Comparison" src="https://github.com/user-attachments/assets/fdc3ae15-7bdb-4d8b-8814-6f1208e7594d"/></p>
+
+
 
 ## Quick Overview
 <div align="center">
