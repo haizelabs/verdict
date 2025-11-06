@@ -40,6 +40,7 @@ from verdict.util.exceptions import (
 )
 from verdict.util.log import logger as base_logger
 from verdict.util.tracing import ExecutionContext
+from verdict.util.cache import DirectoryCache
 
 
 class CascadingProperty:
@@ -264,6 +265,34 @@ class GraphExecutor:
 
         self.pending_tasks: Set[Task] = set()
         self.active_task_count = 0
+
+        # Caching and accounting
+        self.cache = DirectoryCache(config.CACHE_DIR) if config.CACHE_ENABLED or config.RESUME_ON_CACHE else None
+        self._accounting_lock = threading.RLock()
+        self.total_in_tokens: int = 0
+        self.total_out_tokens: int = 0
+        self.total_cost_usd: float = 0.0
+
+    def register_usage(self, model_name: str, provider: str, in_tokens: int, out_tokens: int) -> None:
+        """Aggregate token and cost accounting for this executor.
+
+        Pricing per 1k tokens is sourced from config.get_pricing_for_model().
+        """
+        in_tokens = max(in_tokens or 0, 0)
+        out_tokens = max(out_tokens or 0, 0)
+        in_price, out_price = config.get_pricing_for_model(model_name, provider)
+        with self._accounting_lock:
+            self.total_in_tokens += in_tokens
+            self.total_out_tokens += out_tokens
+            self.total_cost_usd += (in_tokens / 1000.0) * in_price + (out_tokens / 1000.0) * out_price
+
+    def cost_summary(self) -> dict:
+        with self._accounting_lock:
+            return {
+                "in_tokens": self.total_in_tokens,
+                "out_tokens": self.total_out_tokens,
+                "cost_usd": round(self.total_cost_usd, 6),
+            }
 
     def graceful_shutdown(self) -> None:
         self.execution_state = GraphExecutor.State.TERMINATED

@@ -117,6 +117,8 @@ class Pipeline:
         display: bool = False,
         graceful: bool = False,
         tracers: Optional[Union[Tracer, List[Tracer]]] = None,
+        export_path: Optional[Union[str, Path]] = None,
+        export_format: Optional[str] = None,  # "jsonl" or "parquet" (parquet ignored for single input)
     ) -> Tuple[Dict[str, Schema], List[str]]:
         """
         Run the pipeline.
@@ -201,6 +203,16 @@ class Pipeline:
             outputs = self.collect_outputs(self.executor, block_instance)
             if call is not None:
                 call.set_outputs(outputs)
+            # Optional export (single row) as JSONL
+            if export_path is not None:
+                from pathlib import Path as _P
+                import json
+                path = _P(export_path)
+                data, _ = outputs
+                flat = {k: (v.model_dump() if isinstance(v, Schema) else v) for k, v in data.items()}
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(json.dumps(flat) + "\n")
             return outputs
 
     @keyboard_interrupt_safe
@@ -212,6 +224,8 @@ class Pipeline:
         display: bool = False,
         graceful: bool = False,
         tracers: Optional[Union[Tracer, List[Tracer]]] = None,
+        export_path: Optional[Union[str, Path]] = None,
+        export_format: Optional[str] = None,  # "jsonl" or "parquet"
     ) -> Tuple["pd.DataFrame", List[str]]:
         """
         Run the pipeline on a dataset.
@@ -344,6 +358,23 @@ class Pipeline:
                         get_experiment_layout(result_df, experiment_config)
                     )
                     live.refresh()  # type: ignore
+
+                # Optional export
+                if export_path is not None:
+                    from pathlib import Path as _P
+                    path = _P(export_path)
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    fmt = (export_format or "jsonl").lower()
+                    if fmt == "parquet":
+                        try:
+                            import pyarrow  # type: ignore  # noqa: F401
+                        except Exception:
+                            pass
+                        result_df.to_parquet(path, index=False)
+                    else:
+                        result_df.to_json(
+                            path, orient="records", lines=True, force_ascii=False
+                        )
 
                 return result_df, sorted(list(leaf_node_prefixes))
 

@@ -66,3 +66,40 @@ LIGHTWEIGHT_EXECUTOR_WORKER_COUNT: int = 32
 
 VERDICT_LOG_DIR: Path = Path.cwd() / ".verdict"
 VERDICT_LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+# Caching / Reproducibility
+CACHE_ENABLED: bool = bool(os.getenv("VERDICT_CACHE", False)) and not bool(
+    os.getenv("VERDICT_NO_CACHE", False)
+)
+# Directory for content-addressed cache files
+CACHE_DIR: Path = VERDICT_LOG_DIR / "cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+# If set, treat cache as resume (read + write). Default semantics are identical; the
+# flag exists for discoverability and future specialization.
+RESUME_ON_CACHE: bool = bool(os.getenv("VERDICT_RESUME", False))
+
+# Cost / pricing (USD per 1k tokens). These are conservative placeholders. Override
+# via environment variables for accurate accounting in your environment.
+DEFAULT_PRICE_IN_PER_KTOK: float = float(os.getenv("VERDICT_PRICE_IN_PER_KTOK", "0.0"))
+DEFAULT_PRICE_OUT_PER_KTOK: float = float(
+    os.getenv("VERDICT_PRICE_OUT_PER_KTOK", "0.0")
+)
+
+# Optional model-specific pricing. Keys are provider or fully qualified model
+# names (e.g., "openai/gpt-4o-mini"). Values are dicts with "in" and "out".
+PRICING: Dict[str, Dict[str, float]] = {
+    # Example entries (override via env or edit for your org):
+    # "openai/gpt-4o-mini": {"in": 0.15, "out": 0.6},
+}
+
+def get_pricing_for_model(model_name: str, provider: str | None = None) -> tuple[float, float]:
+    key_full = model_name
+    key_provider = provider or model_name.split("/")[0]
+    if key_full in PRICING:
+        d = PRICING[key_full]
+        return d.get("in", DEFAULT_PRICE_IN_PER_KTOK), d.get("out", DEFAULT_PRICE_OUT_PER_KTOK)
+    if key_provider in PRICING:
+        d = PRICING[key_provider]
+        return d.get("in", DEFAULT_PRICE_IN_PER_KTOK), d.get("out", DEFAULT_PRICE_OUT_PER_KTOK)
+    return DEFAULT_PRICE_IN_PER_KTOK, DEFAULT_PRICE_OUT_PER_KTOK
