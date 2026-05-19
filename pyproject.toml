@@ -13,12 +13,12 @@ issues = "https://github.com/haizelabs/verdict/issues"
 
 [project]
 name = "verdict"
-version = "0.2.7"
+version = "0.2.8+moyai.0.0.0"
 authors = [{ name = "Nimit Kalra", email = "nimit@haizelabs.com" }]
 license = { text = "MIT License" }
 description = "LLM evaluation pipelines"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10,<3.14"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
@@ -27,9 +27,9 @@ classifiers = [
 ]
 
 dependencies = [
-    "instructor==1.7.2",
-    "litellm",
-    "openai",
+    "instructor>=1.15.1",
+    "litellm>=1.85.0",
+    "openai>=2.29.0",
     "dill",
     "graphviz",
     "pandas",
