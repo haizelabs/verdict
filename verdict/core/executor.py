@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import sys
+if sys.platform != "win32":
+    import resource
+
 import concurrent.futures
 import copy
 import itertools
-import resource
 import threading
 from abc import ABC, abstractmethod
 from contextlib import ExitStack, contextmanager
@@ -39,26 +42,23 @@ from verdict.util.exceptions import (
     VerdictSystemError,
 )
 from verdict.util.log import logger as base_logger
-from verdict.util.tracing import ExecutionContext
 
 
 class CascadingProperty:
-    def __init__(
-        self,
-        name: str,
-        nodes_fn: Callable[[Any], Collection["Node"]] = lambda graph: graph.nodes,
-        obj_fn: Callable[[Any], Any] = lambda unit: unit,
-        default_factory: Callable[[], Any] = lambda: None,
-    ):
+    def __init__(self,
+            name: str,
+            nodes_fn: Callable[[Any], Collection["Node"]]=lambda graph: graph.nodes,
+            obj_fn: Callable[[Any], Any]=lambda unit: unit,
+            default=None):
         self.name = name
         self.nodes_fn = nodes_fn
         self.obj_fn = obj_fn
-        self.default_factory = default_factory
+        self.default = default
 
     def __get__(self, obj: Any, objtype=None) -> Any:
         if obj is None:
             return self
-        return getattr(self.obj_fn(obj), self.name, self.default_factory())
+        return getattr(self.obj_fn(obj), self.name, self.default)
 
     def __set__(self, obj: Any, value: Any) -> None:
         setattr(self.obj_fn(obj), self.name, value)
@@ -66,18 +66,14 @@ class CascadingProperty:
             for node in self.nodes_fn(obj):
                 setattr(node, self.name, value)
 
-
-def CascadingSetter(
-    attr_name: str, attr_type: Optional[Type] = Any
-) -> Callable[[Any], Self]:
-    def setter(self, value: attr_type = None) -> Self:
+def CascadingSetter(attr_name: str, attr_type: Optional[Type]=Any) -> Callable[[Any], Self]:
+    def setter(self, value: attr_type=None) -> Self:
         # Utilize CascadingProperty's __set__ via setattr
         setattr(self, attr_name, value or True)
         return self
 
     setter.__name__ = f"set_{attr_name}"
     return setter
-
 
 class Node(ABC):
     dependencies: Set[Self]
@@ -87,23 +83,19 @@ class Node(ABC):
     source_input = CascadingProperty("_source_input")
     executor = CascadingProperty("_executor")
 
-    extractor = CascadingProperty(
-        "_extractor", default_factory=lambda: StructuredOutputExtractor()
-    )
+    extractor = CascadingProperty("_extractor", default=StructuredOutputExtractor)
     extract = CascadingSetter("extractor", attr_type=Extractor)
 
     should_pin_output = CascadingProperty("_should_pin_output")
     pin = CascadingSetter("should_pin_output")
 
-    should_stream_output = CascadingProperty(
-        "_should_stream_output", default_factory=lambda: False
-    )
+    should_stream_output = CascadingProperty("_should_stream_output", default=False)
     stream = CascadingSetter("should_stream_output")
 
     propagator = CascadingProperty("_propagator", lambda graph: graph.leaf_nodes)
     propagate = CascadingSetter("propagator")
 
-    __idx = CascadingProperty("_idx", default_factory=lambda: None)
+    __idx = CascadingProperty("_idx", default=None)
     idx = CascadingSetter("__idx")
 
     _ordering_timestamp: float
@@ -154,33 +146,32 @@ class Node(ABC):
         pass
 
     @contextmanager
-    def freeze(self) -> ContextManager[None]:  # type: ignore
+    def freeze(self) -> ContextManager[None]: # type: ignore
         try:
             yield
         finally:
             pass
 
     @contextmanager
-    def freeze_root_nodes(self) -> ContextManager[None]:  # type: ignore
+    def freeze_root_nodes(self) -> ContextManager[None]: # type: ignore
         try:
             yield
         finally:
             pass
 
     @contextmanager
-    def freeze_leaf_nodes(self) -> ContextManager[None]:  # type: ignore
+    def freeze_leaf_nodes(self) -> ContextManager[None]: # type: ignore
         try:
             yield
         finally:
             pass
 
     @contextmanager
-    def freeze_all_nodes(self) -> ContextManager[None]:  # type: ignore
+    def freeze_all_nodes(self) -> ContextManager[None]: # type: ignore
         try:
             yield
         finally:
             pass
-
 
 class Task(ABC):
     leader: bool = False
@@ -188,7 +179,7 @@ class Task(ABC):
 
     def __init__(self) -> None:
         self.completed = False
-        self.output = None  # NOTE: populated by implementation
+        self.output = None # NOTE: populated by implementation
 
     def is_ready(self) -> bool:
         return all(dep.completed for dep in self.dependencies)
@@ -209,39 +200,25 @@ class ExecutionState(Enum):
 
 thread_counter = itertools.count()
 
-
 class GraphExecutor:
     class State(Enum):
         SUCCESS = 1
         FAILURE = 2
         TERMINATED = 3
 
-    def __init__(
-        self,
-        max_workers: Optional[int] = None,
-        execution_context: Optional["ExecutionContext"] = None,
-    ) -> None:
-        soft_fd_limit, hard_fd_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
-        requested_soft_fd_limit = min(
-            hard_fd_limit, max(soft_fd_limit, 5_000_000)
-        )  # TODO: make this a function of max_workers
-        if requested_soft_fd_limit <= hard_fd_limit:
-            base_logger.debug(
-                f"Setting file descriptor limit to {requested_soft_fd_limit}"
-            )
-            resource.setrlimit(
-                resource.RLIMIT_NOFILE, (requested_soft_fd_limit, hard_fd_limit)
-            )
-        else:
-            raise VerdictSystemError(
-                f"Number of requested worker threads ({max_workers}) exceeds the current system file descriptor limit ({hard_fd_limit})."
-            )
+    def __init__(self, max_workers: Optional[int] = None) -> None:
+        if sys.platform != "win32":
+            soft_fd_limit, hard_fd_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
+            requested_soft_fd_limit = min(hard_fd_limit, int(max_workers * 2.0))
+            if requested_soft_fd_limit < hard_fd_limit:
+                base_logger.debug(f"Setting file descriptor limit to {requested_soft_fd_limit}")
+                resource.setrlimit(resource.RLIMIT_NOFILE, (requested_soft_fd_limit, hard_fd_limit))
+            else:
+                raise VerdictSystemError(f"Number of requested worker threads ({max_workers}) exceeds the current system file descriptor limit ({hard_fd_limit}).")
 
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
         # NOTE: map tasks should be very lightweight; this prevents the executor from becoming deadlocked due to fragmented dependency status
-        self.lightweight_executor = concurrent.futures.ThreadPoolExecutor(
-            max_workers=config.LIGHTWEIGHT_EXECUTOR_WORKER_COUNT
-        )
+        self.lightweight_executor = concurrent.futures.ThreadPoolExecutor(max_workers=config.LIGHTWEIGHT_EXECUTOR_WORKER_COUNT)
 
         self.lock = threading.RLock()
 
@@ -253,14 +230,6 @@ class GraphExecutor:
 
         self.outputs: Dict[Task, Schema] = {}
         self.input_data_map: Dict[Task, Schema] = {}
-        self.task_to_call_id: Dict[Task, str] = {}  # Track call_id for each task
-        self.task_to_trace_id: Dict[Task, str] = {}  # Track trace_id for each task
-
-        from verdict.util.tracing import ExecutionContext
-
-        self.execution_context: ExecutionContext = (
-            execution_context or ExecutionContext()
-        )
 
         self.pending_tasks: Set[Task] = set()
         self.active_task_count = 0
@@ -269,16 +238,7 @@ class GraphExecutor:
         self.execution_state = GraphExecutor.State.TERMINATED
         self.is_complete.set()
 
-    def submit(
-        self,
-        tasks: List["Unit"],  # noqa: F821 # type: ignore
-        input_data: Schema,
-        leader: bool = False,
-        execution_context: Optional["ExecutionContext"] = None,
-        trace_id: str = None,
-        parent_id: str = None,
-    ) -> None:  # noqa: F821 # type: ignore[name-defined]
-        execution_context = execution_context or self.execution_context
+    def submit(self, tasks: List["Unit"], input_data: Schema, leader: bool=False) -> None: # noqa: F821 # type: ignore[name-defined]
         with self.lock:
             for task in tasks:
                 if getattr(task, "accumulate", False):
@@ -286,34 +246,10 @@ class GraphExecutor:
                 else:
                     self.input_data_map[task] = input_data
 
-                # If trace_id or parent_id are provided, create a new ExecutionContext for this task
-                task_execution_context = execution_context
-                if trace_id is not None or parent_id is not None:
-                    task_execution_context = ExecutionContext(
-                        tracer=execution_context.tracer,
-                        trace_id=trace_id or execution_context.trace_id,
-                        parent_id=parent_id
-                        if parent_id is not None
-                        else execution_context.parent_id,
-                    )
+                base_logger.debug(f"Submitting task with input: {input_data.escape()}", unit=".".join(task.prefix))
+                self._try_execute(task, leader)
 
-                self.task_to_trace_id[task] = task_execution_context.trace_id
-
-                base_logger.debug(
-                    f"Submitting task with input: {input_data.escape()}",
-                    unit=".".join(task.prefix),
-                )
-                self._try_execute(
-                    task, leader, execution_context=task_execution_context
-                )
-
-    def _try_execute(
-        self,
-        task: "Unit",  # noqa: F821 # type: ignore
-        leader: bool,
-        execution_context: Optional["ExecutionContext"] = None,
-    ) -> None:  # noqa: F821 # type: ignore[name-defined]
-        execution_context = execution_context or self.execution_context
+    def _try_execute(self, task: "Unit", leader: bool) -> None: # noqa: F821 # type: ignore[name-defined]
         logger = base_logger.bind(unit=".".join(task.prefix))
         with self.lock:
             if self.is_complete.is_set():
@@ -329,20 +265,16 @@ class GraphExecutor:
 
                 input_data = self.input_data_map.get(task, Schema.empty())
                 if getattr(task, "accumulate", False):
-                    input_data = Schema.of(values=[x[0] for x in input_data.values])  # type: ignore
+                    input_data = Schema.of(values=[x[0] for x in input_data.values]) # type: ignore
                     logger.debug(f"Accumulated {len(input_data.values)} values")
 
                 task.thread_id = next(thread_counter)
 
                 if getattr(task, "lightweight", False):
-                    future = self.lightweight_executor.submit(
-                        self._execute_task, task, input_data, leader, execution_context
-                    )
+                    future = self.lightweight_executor.submit(self._execute_task, task, input_data, leader)
                     logger.debug("Submitted to lightweight ThreadPoolExecutor")
                 else:
-                    future = self.executor.submit(
-                        self._execute_task, task, input_data, leader, execution_context
-                    )
+                    future = self.executor.submit(self._execute_task, task, input_data, leader)
                     logger.debug("Submitted to I/O ThreadPoolExecutor")
 
                 future.add_done_callback(lambda _: self._on_task_complete(task))
@@ -350,14 +282,7 @@ class GraphExecutor:
                 self.pending_tasks.add(task)
 
     @base_logger.catch()
-    def _execute_task(
-        self,
-        task: "Unit",  # noqa: F821 # type: ignore
-        input_data: Schema,
-        leader: bool,
-        execution_context: Optional["ExecutionContext"] = None,
-    ) -> None:  # noqa: F821 # type: ignore[name-defined]
-        execution_context = execution_context or self.execution_context
+    def _execute_task(self, task: "Unit", input_data: Schema, leader: bool) -> None: # noqa: F821 # type: ignore[name-defined]
         logger = base_logger.bind(unit=".".join(task.prefix), thread_id=task.thread_id)
         if self.is_complete.is_set():
             logger.error("Exiting early since executor has been marked is_complete")
@@ -369,36 +294,22 @@ class GraphExecutor:
         try:
             # don't allow pinning if the prompt references the source sample
             if task.should_pin_output and "source" in task._prompt.get_all_keys():
-                raise ConfigurationError(
-                    "Prompt references source input. Cannot pin result across all samples."
-                )
+                raise ConfigurationError("Prompt references source input. Cannot pin result across all samples.")
 
             if not task.should_pin_output or leader:
                 if task.should_pin_output:
                     logger.debug("Elected as leader.")
-                # Start the trace for this unit execution and store the call_id
-                call_name = (
-                    getattr(task, "_char", None)
-                    or getattr(task, "char", None)
-                    or task.__class__.__name__
-                )
-                with execution_context.trace_call(
-                    name=call_name,
-                    inputs={"input": input_data, "unit": task},
-                ) as call:
-                    if call is not None:
-                        self.task_to_call_id[task] = call.call_id
-                    output = task.execute(
-                        input_data, execution_context=execution_context
-                    )
-                    with task.shared.shared_output:
-                        task.shared.output = output
-                        task.shared.shared_output.notify_all()
+                output = task.execute(input_data)
+                with task.shared.shared_output:
+                    task.shared.output = output
+                    task.shared.shared_output.notify_all()
             else:
                 logger.debug("Waiting for leader to complete.")
                 with task.shared.shared_output:
                     while task.shared.output is None:
-                        task.shared.shared_output.wait()  # timeout=0.1)
+                        # allows other threads to run, but still possibly locks up the ThreadPoolExecutor until the `leader` completes
+                        # since the `leader` is submitted first, this should not cause a deadlock.
+                        task.shared.shared_output.wait()#timeout=0.1)
 
                 output = task.shared.output
                 logger.debug("Gathered output from leader.")
@@ -414,7 +325,7 @@ class GraphExecutor:
 
             raise VerdictExecutionTimeError() from e
 
-    def _on_task_complete(self, task: "Unit") -> None:  # noqa: F821 # type: ignore[name-defined]
+    def _on_task_complete(self, task: "Unit") -> None: # noqa: F821 # type: ignore[name-defined]
         logger = base_logger.bind(unit=".".join(task.prefix), thread_id=task.thread_id)
         if self.is_complete.is_set():
             logger.error("Exiting early since executor has been marked is_complete")
@@ -428,54 +339,25 @@ class GraphExecutor:
                 if getattr(dependent, "accumulate", False):
                     if dependent not in self.input_data_map:
                         self.input_data_map[dependent] = Schema.of(values=[])
-                    self.input_data_map[dependent].values.append(
-                        (output, getattr(task, "_ordering_timestamp", 0))
-                    )  # type: ignore
-                    self.input_data_map[dependent].values.sort(key=lambda x: x[1])  # type: ignore
+                    self.input_data_map[dependent].values.append((output, getattr(task, "_ordering_timestamp", 0))) # type: ignore
+                    self.input_data_map[dependent].values.sort(key=lambda x: x[1]) # type: ignore
                 else:
                     self.input_data_map[dependent] = output
 
             task.completed = True
 
-            trace_id = self.task_to_trace_id.get(task, None)
-
             for dependent in task.dependents:
                 if all(dep.completed for dep in dependent.dependencies):
-                    logger.debug(
-                        f"Submitting dependent {'.'.join(dependent.prefix)} since all dependencies are complete."
-                    )
-                    parent_call_id = self.task_to_call_id.get(task, None)
-                    dependent_execution_context = ExecutionContext(
-                        tracer=self.execution_context.tracer,
-                        trace_id=self.task_to_trace_id.get(
-                            task, self.execution_context.trace_id
-                        ),
-                        parent_id=parent_call_id,
-                    )
-                    self._try_execute(
-                        dependent,
-                        task.leader,
-                        execution_context=dependent_execution_context,
-                    )
+                    logger.debug(f"Submitting dependent {'.'.join(dependent.prefix)} since all dependencies are complete.")
+                    self._try_execute(dependent, task.leader)
                 else:
-                    logger.debug(
-                        f"Skipping dependent {'.'.join(dependent.prefix)} since not all dependencies are complete."
-                    )
+                    logger.debug(f"Skipping dependent {'.'.join(dependent.prefix)} since not all dependencies are complete.")
 
-            ready_tasks = [
-                pending for pending in list(self.pending_tasks) if pending.is_ready()
-            ]
+            ready_tasks = [pending for pending in list(self.pending_tasks) if pending.is_ready()]
             for ready_task in ready_tasks:
                 self.pending_tasks.remove(ready_task)
-                logger.debug(
-                    f"Submitting unrelated ready task {'.'.join(ready_task.prefix)}",
-                    unit="",
-                )
-                self._try_execute(
-                    ready_task,
-                    ready_task.leader,
-                    execution_context=self.execution_context,
-                )
+                logger.debug(f"Submitting unrelated ready task {'.'.join(ready_task.prefix)}", unit="")
+                self._try_execute(ready_task, ready_task.leader)
 
             self.execution_pool.remove(task)
             self.active_task_count -= 1
@@ -485,7 +367,7 @@ class GraphExecutor:
                     self.execution_state = GraphExecutor.State.SUCCESS
                 self.is_complete.set()
 
-    def wait_for_completion(self, graceful: bool = False) -> None:
+    def wait_for_completion(self, graceful: bool=False) -> None:
         self.is_complete.wait()
 
         base_logger.info(f"GraphExecutor completed in state {self.execution_state}")
@@ -504,8 +386,7 @@ class GraphExecutor:
                     file_name = handler._sink._file.name
 
             raise VerdictSystemError(
-                "Executor failed. See logs for context"
-                + (f": {file_name}" if file_name else ".")
+                "Executor failed. See logs for context" + (f": {file_name}" if file_name else ".")
             )
 
         if self.execution_state == GraphExecutor.State.TERMINATED:
@@ -524,9 +405,7 @@ class GraphExecutor:
             return dill.load(f)
 
 
-T = TypeVar("T", bound="Node")
-
-
+T = TypeVar('T', bound="Node")
 class Graph(Generic[T], Node, ABC):
     def __init__(self, node_type: Type[T]) -> None:
         self.nodes: Set[T] = set()
@@ -538,9 +417,7 @@ class Graph(Generic[T], Node, ABC):
         self.nodes.add(node)
 
     def setup_link(self, from_node: T, to_node: T) -> None:
-        assert isinstance(from_node, self.node_type) and isinstance(
-            to_node, self.node_type
-        )
+        assert isinstance(from_node, self.node_type) and isinstance(to_node, self.node_type)
 
         if from_node not in self.nodes:
             self.add(from_node)
@@ -597,7 +474,7 @@ class Graph(Generic[T], Node, ABC):
             return list(filter(lambda node: len(node.dependents) == 0, self.nodes))
 
     @contextmanager
-    def freeze(self) -> ContextManager[None]:  # type: ignore
+    def freeze(self) -> ContextManager[None]: # type: ignore
         """
         Freeze the root_nodes and leaf_nodes properties so that they can be iterated over
         without triggering a recomputation of the properties.
@@ -614,7 +491,7 @@ class Graph(Generic[T], Node, ABC):
                 del self._leaf_nodes
 
     @contextmanager
-    def freeze_leaf_nodes(self) -> ContextManager[None]:  # type: ignore
+    def freeze_leaf_nodes(self) -> ContextManager[None]: # type: ignore
         """Freeze all leaf nodes within a single `with` block."""
         with ExitStack() as stack:
             # Enter `freeze` for all leaf nodes
@@ -623,7 +500,7 @@ class Graph(Generic[T], Node, ABC):
             yield
 
     @contextmanager
-    def freeze_root_nodes(self) -> ContextManager[None]:  # type: ignore
+    def freeze_root_nodes(self) -> ContextManager[None]: # type: ignore
         """Freeze all leaf nodes within a single `with` block."""
         with ExitStack() as stack:
             # Enter `freeze` for all root nodes
@@ -632,7 +509,7 @@ class Graph(Generic[T], Node, ABC):
             yield
 
     @contextmanager
-    def freeze_all_nodes(self) -> ContextManager[None]:  # type: ignore
+    def freeze_all_nodes(self) -> ContextManager[None]: # type: ignore
         """Freeze all nodes within a single `with` block."""
         with ExitStack() as stack:
             for node in self.nodes:
@@ -654,10 +531,9 @@ class Graph(Generic[T], Node, ABC):
 
     def apply(self, fn: Callable[[T], T]) -> "Graph[T]":
         # NOTE: only call apply on materialized graphs
-        other = type(self)()  # type: ignore
+        other = type(self)() # type: ignore
 
         old_to_new: Dict[T, T] = {}
-
         def map_old_to_new(node: T) -> T:
             if node in old_to_new:
                 return old_to_new[node]
@@ -665,14 +541,12 @@ class Graph(Generic[T], Node, ABC):
             old_to_new[node] = fn(node).clear_dependencies()
             return old_to_new[node]
 
-        for node, dependents in list(
-            map(lambda node: (node, list(node.dependents)), self.sort())
-        ):
+        for node, dependents in list(map(lambda node: (node, list(node.dependents)), self.sort())):
             if len(dependents) == 0:
                 other.add(map_old_to_new(node))
             else:
                 for dep in self.sort_by_timestamp(dependents):
-                    other.setup_link(map_old_to_new(node), map_old_to_new(dep))  # type: ignore
+                    other.setup_link(map_old_to_new(node), map_old_to_new(dep)) # type: ignore
 
         return other
 
@@ -702,18 +576,14 @@ class Graph(Generic[T], Node, ABC):
 
         from graphviz import Digraph  # type: ignore[import-untyped]
 
-        def build_graphviz(
-            nodes: Collection[T], dot: Digraph, visited: Optional[Set[T]] = None
-        ) -> None:
+        def build_graphviz(nodes: Collection[T], dot: Digraph, visited: Optional[Set[T]]=None) -> None:
             if visited is None:
                 visited = set()
             for node in self.sort_by_timestamp(nodes):
                 if node in visited:
                     continue
 
-                dot.node(
-                    str(id(node)), label=node.char, shape="box"
-                )  # , style='filled', fillcolor=node.color)
+                dot.node(str(id(node)), label=node.char, shape='box')#, style='filled', fillcolor=node.color)
 
                 visited.add(node)
                 for dep in self.sort_by_timestamp(node.dependencies):
@@ -726,7 +596,7 @@ class Graph(Generic[T], Node, ABC):
         build_graphviz(self.nodes, dot)
 
         # Render and view the graph
-        image = Image.open(BytesIO(dot.pipe(format="png")))
+        image = Image.open(BytesIO(dot.pipe(format='png')))
         if display:
             image.show()
 
