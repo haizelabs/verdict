@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import sys
+if sys.platform != "win32":
+    import resource
+
 import concurrent.futures
 import copy
 import itertools
-import resource
 import threading
 from abc import ABC, abstractmethod
 from contextlib import ExitStack, contextmanager
@@ -221,21 +224,22 @@ class GraphExecutor:
         max_workers: Optional[int] = None,
         execution_context: Optional["ExecutionContext"] = None,
     ) -> None:
-        soft_fd_limit, hard_fd_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
-        requested_soft_fd_limit = min(
-            hard_fd_limit, max(soft_fd_limit, 5_000_000)
-        )  # TODO: make this a function of max_workers
-        if requested_soft_fd_limit <= hard_fd_limit:
-            base_logger.debug(
-                f"Setting file descriptor limit to {requested_soft_fd_limit}"
-            )
-            resource.setrlimit(
-                resource.RLIMIT_NOFILE, (requested_soft_fd_limit, hard_fd_limit)
-            )
-        else:
-            raise VerdictSystemError(
-                f"Number of requested worker threads ({max_workers}) exceeds the current system file descriptor limit ({hard_fd_limit})."
-            )
+        if sys.platform != "win32":
+            soft_fd_limit, hard_fd_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
+            requested_soft_fd_limit = min(
+                hard_fd_limit, max(soft_fd_limit, 5_000_000)
+            )  # TODO: make this a function of max_workers
+            if requested_soft_fd_limit <= hard_fd_limit:
+                base_logger.debug(
+                    f"Setting file descriptor limit to {requested_soft_fd_limit}"
+                )
+                resource.setrlimit(
+                    resource.RLIMIT_NOFILE, (requested_soft_fd_limit, hard_fd_limit)
+                )
+            else:
+                raise VerdictSystemError(
+                    f"Number of requested worker threads ({max_workers}) exceeds the current system file descriptor limit ({hard_fd_limit})."
+                )
 
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
         # NOTE: map tasks should be very lightweight; this prevents the executor from becoming deadlocked due to fragmented dependency status
